@@ -46,7 +46,7 @@ jobs:
   # macOS: NovelMaker.app（universal2 = Intel + Apple Silicon）を DMG 化
   # =====================================================================
   macos:
-    runs-on: macos-13
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
