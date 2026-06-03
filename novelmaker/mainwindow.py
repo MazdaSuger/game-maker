@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QPushButton,
 )
 from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QStandardPaths
 
 from . import APP_NAME, __version__
 from .model import Project
@@ -31,6 +31,21 @@ def save_path_for(project: Project) -> str:
         base = os.path.splitext(project.path)[0]
         return base + ".saves.json"
     return os.path.join(default_save_dir(), "untitled.saves.json")
+
+
+def default_documents_dir() -> str:
+    """保存ダイアログの初期ディレクトリ（書き込み可能な場所）を返す。
+
+    macOS の .app はカレントディレクトリが "/"（読み取り専用）になるため、
+    相対パスのままだと保存に失敗する。書類フォルダ→ホームの順に解決する。
+    """
+    for loc in (QStandardPaths.DocumentsLocation,
+                QStandardPaths.HomeLocation,
+                QStandardPaths.DesktopLocation):
+        d = QStandardPaths.writableLocation(loc)
+        if d and os.path.isdir(d):
+            return d
+    return os.path.expanduser("~")
 
 
 class SettingsEditor(QWidget):
@@ -259,7 +274,8 @@ class MainWindow(QMainWindow):
                                     "先にシーンを1つ以上作成してください。")
             return
         out_dir = QFileDialog.getExistingDirectory(
-            self, "書き出し先フォルダを選択（中身が上書きされます）")
+            self, "書き出し先フォルダを選択（中身が上書きされます）",
+            default_documents_dir())
         if not out_dir:
             return
         # 空でないフォルダへの書き出しは確認
@@ -297,7 +313,8 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "シーンがありません",
                                     "先にシーンを1つ以上作成してください。")
             return
-        default = (self.project.title or "novelgame") + "-web.zip"
+        default = os.path.join(default_documents_dir(),
+                               (self.project.title or "novelgame") + "-web.zip")
         zip_path, _ = QFileDialog.getSaveFileName(
             self, "Cloudflare用ZIPを書き出し", default, "ZIP (*.zip)")
         if not zip_path:
@@ -381,7 +398,8 @@ class MainWindow(QMainWindow):
         return self._write(self.project.path)
 
     def save_project_as(self) -> bool:
-        default = (self.project.title or "novelgame") + ".nvproj"
+        fname = (self.project.title or "novelgame") + ".nvproj"
+        default = os.path.join(default_documents_dir(), fname)
         path, _ = QFileDialog.getSaveFileName(self, "名前を付けて保存", default, PROJECT_FILTER)
         if not path:
             return False
