@@ -22,6 +22,8 @@
 | 💾 マニュアルセーブ | **10スロット** の手動セーブ / ロード |
 | 🌑 暗転・背景管理 | 背景の切り替え、暗転 / 暗転解除 |
 | 📊 数値ゲージ管理 | 好感度などのゲージ（最小/最大/色/表示）を画面に表示 |
+| 🌐 ブラウザ書き出し | 作ったゲームを単体HTML/JSに書き出し、ブラウザで配布・プレイ |
+| 💿 アプリ配布 | 本体を Mac universal DMG / Windows EXE に書き出し（CI対応） |
 
 ## 🚀 セットアップ & 起動
 
@@ -64,23 +66,72 @@ python run.py
 | ➡ | シーン移動 | 指定シーンへジャンプ |
 | 🏁 | エンディング | エンディング（裏エンド含む）を表示 |
 
+## 🌐 ゲームをブラウザに書き出す
+
+メニューの **ファイル → 🌐 ブラウザ(HTML)に書き出し…** で、作成したゲームを
+単体の Web ページとして書き出せます。出力フォルダ内の **`index.html`** を
+ブラウザで開けば、そのまま遊べます（インストール不要・配布も簡単）。
+
+- 画像・BGM などのアセットは `assets/` に自動コピーされ、パスも相対化されます。
+- セーブ（10スロット）はブラウザの `localStorage` に保存されます。
+- 静的ファイルのみなので、GitHub Pages / Netlify 等にそのまま公開できます。
+
+書き出される内容:
+
+```
+出力フォルダ/
+├── index.html      # これを開けば起動
+├── game.js         # ゲームデータ（プロジェクト）
+├── engine.js       # 実行エンジン（runtime.py のJS版）
+├── player.js       # プレイヤーUI
+├── style.css
+└── assets/         # 画像・音声
+```
+
+## 💿 本体を Mac DMG / Windows EXE に書き出す
+
+ノベルメーカー本体を各OSの実行ファイルにパッケージできます。
+詳しくは [`packaging/README.md`](packaging/README.md) を参照。
+
+- **Mac:** `NovelMaker.app` →  **universal2 DMG**（Intel + Apple Silicon 両対応）
+- **Windows:** `NovelMaker.exe`（ワンフォルダ / zip）
+
+GitHub Actions（`.github/workflows/build.yml`）で、macOS / Windows / Linux 向けを
+自動ビルドします。`v*` タグを push すると Release に成果物を添付します。
+
+```bash
+pip install -r requirements.txt pyinstaller
+pyinstaller --noconfirm packaging/novelmaker.spec
+```
+
 ## 🗂 プロジェクト構成
 
 ```
 game-maker/
 ├── run.py                  # 起動ランチャー
 ├── requirements.txt
-└── novelmaker/
-    ├── app.py              # QApplication エントリ・テーマ
-    ├── mainwindow.py       # メインウィンドウ（エディタ⇔プレイヤー）
-    ├── model.py            # データモデル・サンプルプロジェクト
-    ├── runtime.py          # ゲーム実行エンジン（Qt 非依存）
-    ├── save.py             # 10スロットセーブ管理
-    ├── condition_widget.py # 条件式ビルダー
-    ├── command_dialog.py   # コマンド編集ダイアログ
-    ├── scene_editor.py     # シーン＆コンポーネント編集
-    ├── editors.py          # 各リソース編集タブ
-    └── player.py           # プレイヤー（実行画面）
+├── novelmaker/             # デスクトップアプリ本体（PySide6）
+│   ├── app.py              # QApplication エントリ・テーマ
+│   ├── mainwindow.py       # メインウィンドウ（エディタ⇔プレイヤー）
+│   ├── model.py            # データモデル・サンプルプロジェクト
+│   ├── runtime.py          # ゲーム実行エンジン（Qt 非依存）
+│   ├── save.py             # 10スロットセーブ管理
+│   ├── exporter.py         # ブラウザ(HTML)書き出し
+│   ├── condition_widget.py # 条件式ビルダー
+│   ├── command_dialog.py   # コマンド編集ダイアログ
+│   ├── scene_editor.py     # シーン＆コンポーネント編集
+│   ├── editors.py          # 各リソース編集タブ
+│   └── player.py           # プレイヤー（実行画面）
+├── web/                    # ブラウザ書き出し用ランタイム
+│   ├── index.html
+│   ├── engine.js           # 実行エンジン（runtime.py のJS版）
+│   ├── player.js           # プレイヤーUI
+│   └── style.css
+├── packaging/              # 配布ビルド（DMG / EXE）
+│   ├── novelmaker.spec     # PyInstaller 設定
+│   └── README.md
+└── .github/workflows/
+    └── build.yml           # Mac/Win/Linux 自動ビルド
 ```
 
 ## 💾 データ形式

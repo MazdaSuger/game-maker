@@ -21,6 +21,7 @@ from .editors import (
 )
 from .player import PlayerWidget
 from .save import SaveManager, default_save_dir
+from .exporter import export_to_html
 
 PROJECT_FILTER = "ノベルメーカー プロジェクト (*.nvproj);;JSON (*.json);;すべて (*.*)"
 
@@ -184,6 +185,10 @@ class MainWindow(QMainWindow):
             a.triggered.connect(slot)
             m.addAction(a)
         m.addSeparator()
+        export_a = QAction("🌐 ブラウザ(HTML)に書き出し…", self)
+        export_a.triggered.connect(self.export_html)
+        m.addAction(export_a)
+        m.addSeparator()
         quit_a = QAction("終了", self)
         quit_a.triggered.connect(self.close)
         m.addAction(quit_a)
@@ -208,6 +213,50 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.player)
         self.stack.setCurrentWidget(self.player)
         self.player.start()
+
+    def export_html(self):
+        """現在のプロジェクトをブラウザで遊べるWebゲームに書き出す。"""
+        if not self.project.scenes:
+            QMessageBox.information(self, "シーンがありません",
+                                    "先にシーンを1つ以上作成してください。")
+            return
+        out_dir = QFileDialog.getExistingDirectory(
+            self, "書き出し先フォルダを選択（中身が上書きされます）")
+        if not out_dir:
+            return
+        # 空でないフォルダへの書き出しは確認
+        try:
+            if os.listdir(out_dir):
+                if QMessageBox.question(
+                        self, "確認",
+                        "選択したフォルダにはすでにファイルがあります。\n"
+                        "同名ファイルは上書きされます。続行しますか？") != QMessageBox.Yes:
+                    return
+        except OSError:
+            pass
+        try:
+            result = export_to_html(self.project.data, out_dir)
+        except Exception as e:
+            QMessageBox.critical(self, "書き出し失敗", f"書き出せませんでした:\n{e}")
+            return
+        msg = (f"ブラウザ用ゲームを書き出しました。\n\n"
+               f"場所: {out_dir}\n"
+               f"アセット: {result['assets']} 個をコピー\n\n"
+               f"「index.html」をブラウザで開くと遊べます。")
+        if result["missing"]:
+            msg += f"\n\n⚠ 見つからなかったファイル {len(result['missing'])} 件は除外しました。"
+        box = QMessageBox(QMessageBox.Information, "書き出し完了", msg, parent=self)
+        open_btn = box.addButton("フォルダを開く", QMessageBox.ActionRole)
+        box.addButton("閉じる", QMessageBox.RejectRole)
+        box.exec()
+        if box.clickedButton() is open_btn:
+            self._open_folder(out_dir)
+        self.statusBar().showMessage(f"ブラウザ書き出し完了: {out_dir}", 5000)
+
+    def _open_folder(self, path: str):
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import QUrl
+        QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
     def _exit_player(self):
         self.stack.setCurrentWidget(self.editor_page)

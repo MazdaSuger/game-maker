@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>ノベルゲーム</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="stage">
+    <div id="bg"></div>
+    <div id="char"></div>
+    <div id="blackout"></div>
+    <div id="gauges"></div>
+    <button id="items-btn" title="所持アイテム">🎒</button>
+    <div id="menu">
+      <button data-act="save">セーブ</button>
+      <button data-act="load">ロード</button>
+      <button data-act="restart">最初から</button>
+    </div>
+
+    <div id="choices" style="display:none"></div>
+
+    <div id="msgwin">
+      <div id="msg-name"></div>
+      <div id="msg-text"></div>
+      <div id="msg-next">▼</div>
+    </div>
+
+    <!-- 名前入力 -->
+    <div id="ov-name" class="overlay hidden">
+      <div class="box narrow">
+        <h3 id="name-prompt"></h3>
+        <input type="text" id="name-field" maxlength="16" />
+        <div class="center"><button class="primary" id="name-ok">決定</button></div>
+      </div>
+    </div>
+
+    <!-- アイテム -->
+    <div id="ov-items" class="overlay hidden">
+      <div class="box">
+        <h3>所持アイテム</h3>
+        <div id="items-list"></div>
+        <div class="center"><button data-close="ov-items">閉じる</button></div>
+      </div>
+    </div>
+
+    <!-- セーブ/ロード -->
+    <div id="ov-save" class="overlay hidden">
+      <div class="box">
+        <h3 id="save-title">セーブ</h3>
+        <div id="slots"></div>
+        <div class="center"><button data-close="ov-save">閉じる</button></div>
+      </div>
+    </div>
+
+    <!-- エンディング -->
+    <div id="ov-ending" class="overlay hidden">
+      <div class="box narrow">
+        <div class="badge" id="ending-badge"></div>
+        <div id="ending-name"></div>
+        <div id="ending-desc"></div>
+        <div class="center">
+          <button class="primary" id="ending-restart">タイトルへ（最初から）</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>     <!-- window.GAME_DATA を定義 -->
+  <script src="engine.js"></script>
+  <script src="player.js"></script>
+</body>
+</html>

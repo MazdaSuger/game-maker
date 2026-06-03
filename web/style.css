@@ -1,0 +1,131 @@
+/* ブラウザ版プレイヤー スタイル */
+:root {
+  --accent: #5a8dff;
+  --panel: rgba(15, 18, 30, 0.86);
+  --border: rgba(120, 150, 220, 0.5);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  width: 100%; height: 100%;
+  background: #000; color: #e6e9f2; overflow: hidden;
+  font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic",
+               Meiryo, sans-serif;
+}
+#stage {
+  position: relative; width: 100vw; height: 100vh; overflow: hidden;
+  background: #101018; user-select: none;
+}
+#bg {
+  position: absolute; inset: 0;
+  background-size: cover; background-position: center; transition: opacity .25s;
+}
+#blackout {
+  position: absolute; inset: 0; background: #000; opacity: 0;
+  transition: opacity .35s; pointer-events: none;
+}
+#blackout.on { opacity: 1; }
+#char {
+  position: absolute; left: 50%; bottom: 26%; transform: translateX(-50%);
+  height: 78%; display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+#char img { height: 100%; object-fit: contain; }
+.char-ph {
+  width: 22vw; height: 78vh; border-radius: 16px;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  font-weight: bold; font-size: 20px; padding: 12px; white-space: pre-line;
+}
+
+/* ゲージ */
+#gauges {
+  position: absolute; top: 12px; left: 12px;
+  background: rgba(10, 12, 20, 0.62); border-radius: 10px; padding: 8px 12px;
+  min-width: 190px;
+}
+.gauge { margin: 4px 0; }
+.gauge-label { font-size: 12px; font-weight: bold; }
+.gauge-track {
+  height: 12px; background: rgba(0,0,0,0.5); border-radius: 6px; overflow: hidden;
+  margin-top: 2px;
+}
+.gauge-fill { height: 100%; border-radius: 6px; transition: width .3s; }
+
+/* ボタン類 */
+#items-btn {
+  position: absolute; top: 12px; right: 12px; width: 44px; height: 44px;
+  font-size: 20px; border-radius: 22px; cursor: pointer;
+  background: rgba(20,24,40,0.8); border: 1px solid var(--border); color: #fff;
+}
+#items-btn:hover { background: rgba(40,48,80,0.9); }
+#menu {
+  position: absolute; top: 64px; right: 12px; display: flex; gap: 6px;
+}
+#menu button {
+  background: rgba(20,24,40,0.8); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 10px; color: #e8ecff; cursor: pointer;
+}
+#menu button:hover { background: rgba(50,60,100,0.9); }
+
+/* メッセージウィンドウ */
+#msgwin {
+  position: absolute; left: 4%; bottom: 12px; width: 92%; min-height: 24%;
+  background: var(--panel); border: 2px solid var(--border);
+  border-radius: 14px; padding: 14px 24px 18px; cursor: pointer;
+}
+#msg-name { font-size: 18px; font-weight: bold; min-height: 24px; }
+#msg-text { font-size: 19px; line-height: 1.6; color: #f2f4ff; margin-top: 4px; }
+#msg-next {
+  position: absolute; right: 18px; bottom: 10px; opacity: .7;
+  animation: blink 1s infinite;
+}
+@keyframes blink { 50% { opacity: .15; } }
+
+/* 選択肢 */
+#choices {
+  position: absolute; left: 20%; top: 22%; width: 60%;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+}
+.choice-btn {
+  width: 100%; max-width: 520px; padding: 14px 20px; font-size: 17px;
+  background: rgba(30,36,60,0.92); border: 2px solid var(--border);
+  border-radius: 10px; color: #eef; cursor: pointer;
+}
+.choice-btn:hover { background: rgba(70,90,160,0.95); border-color: #9fe3ff; }
+
+/* オーバーレイ */
+.overlay {
+  position: absolute; inset: 0; background: rgba(0,0,0,0.72);
+  display: flex; align-items: center; justify-content: center; z-index: 20;
+}
+.overlay.hidden { display: none; }
+.box {
+  background: #1a1e2e; border: 2px solid var(--border); border-radius: 16px;
+  padding: 24px; width: min(640px, 90vw); max-height: 86vh; overflow: auto;
+}
+.box.narrow { width: min(460px, 90vw); }
+.box h2, .box h3 { margin-bottom: 12px; color: #dfe6ff; }
+.overlay input[type=text] {
+  width: 100%; padding: 10px; font-size: 16px; margin: 12px 0;
+  background: #0e1120; border: 1px solid var(--border); border-radius: 6px;
+  color: #fff;
+}
+.overlay button {
+  background: #2a3050; border: 1px solid #44507a; border-radius: 7px;
+  padding: 8px 14px; color: #e8ecff; cursor: pointer;
+}
+.overlay button:hover { background: #3a4470; }
+.overlay button.primary { background: var(--accent); border-color: #6a9dff;
+  font-weight: bold; }
+.slot, .item-row {
+  display: flex; align-items: center; gap: 10px; padding: 10px;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(150,170,230,0.25);
+  border-radius: 10px; margin: 6px 0;
+}
+.slot .info, .item-row .info { flex: 1; }
+.slot .sub, .item-row .sub { color: #aab; font-size: 13px; }
+.badge { text-align: center; font-size: 22px; font-weight: bold; letter-spacing: 3px; }
+#ending-name { text-align: center; font-size: 28px; font-weight: bold; color: #fff;
+  margin: 8px 0; }
+#ending-desc { text-align: center; color: #cdd; margin-bottom: 16px; }
+.center { text-align: center; }
+.row-actions { display: flex; gap: 6px; }

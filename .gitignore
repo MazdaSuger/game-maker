@@ -11,5 +11,16 @@ env/
 *.nvproj
 !examples/*.nvproj
 
+# PyInstaller / 配布ビルド
+/build/
+/dist/
+*.dmg
+NovelMaker-*.zip
+NovelMaker-*.tar.gz
+
+# ブラウザ書き出しの出力例
+/export/
+/webgame/
+
 .DS_Store
 *.swp

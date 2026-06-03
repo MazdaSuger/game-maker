@@ -1,0 +1,368 @@
+/* ============================================================
+ *  engine.js — ブラウザ版ゲーム実行エンジン
+ * ------------------------------------------------------------
+ *  novelmaker/runtime.py を JavaScript へ移植したもの。
+ *  DOM には依存しない純粋ロジック（Node でもテスト可能）。
+ *  ブラウザでは window.NovelEngine として公開する。
+ * ============================================================ */
+(function (root) {
+  "use strict";
+
+  const VAR_PATTERN = /\{([A-Za-z_][A-Za-z0-9_]*)\}/g;
+
+  function toNumber(v) {
+    const n = parseFloat(v);
+    return isNaN(n) ? 0 : n;
+  }
+
+  function looksNumeric(s) {
+    if (s === "" || s === null || s === undefined) return false;
+    return !isNaN(parseFloat(s)) && isFinite(s);
+  }
+
+  function compare(left, op, right) {
+    switch (op) {
+      case "==": return left === right;
+      case "!=": return left !== right;
+      case ">":  return left > right;
+      case ">=": return left >= right;
+      case "<":  return left < right;
+      case "<=": return left <= right;
+      default:   return false;
+    }
+  }
+
+  function compareStr(a, op, b) {
+    switch (op) {
+      case ">":  return a > b;
+      case ">=": return a >= b;
+      case "<":  return a < b;
+      case "<=": return a <= b;
+      default:   return false;
+    }
+  }
+
+  // -------------------------------------------------------------------
+  // 条件評価
+  // -------------------------------------------------------------------
+  function evaluateCondition(cond, state) {
+    if (!cond) return true;
+    const terms = cond.terms || [];
+    if (terms.length === 0) return true;
+    const logic = cond.logic || "and";
+    const results = terms.map((t) => evalTerm(t, state));
+    return logic === "and" ? results.every(Boolean) : results.some(Boolean);
+  }
+
+  function evalTerm(term, state) {
+    const kind = term.kind;
+    const ref = term.ref || "";
+    const op = term.op || "==";
+    const raw = term.value !== undefined ? term.value : "";
+
+    if (kind === "var") {
+      const val = state.variables[ref];
+      if (typeof val === "boolean") {
+        const want = ["true", "1", "はい", "yes", "on"].includes(
+          String(raw).trim().toLowerCase());
+        if (op === "==") return val === want;
+        if (op === "!=") return val !== want;
+        return false;
+      }
+      if (typeof val === "string" && !looksNumeric(val)) {
+        if (op === "==") return val === String(raw);
+        if (op === "!=") return val !== String(raw);
+        return compareStr(val, op, String(raw));
+      }
+      return compare(toNumber(val), op, toNumber(raw));
+    }
+    if (kind === "gauge") {
+      const val = state.gauges[ref] !== undefined ? state.gauges[ref] : 0;
+      return compare(toNumber(val), op, toNumber(raw));
+    }
+    if (kind === "item") {
+      const has = state.items.includes(ref);
+      if (op === "has") return has;
+      if (op === "notHas") return !has;
+      return false;
+    }
+    return false;
+  }
+
+  // -------------------------------------------------------------------
+  // プロジェクト索引
+  // -------------------------------------------------------------------
+  function indexById(list) {
+    const m = {};
+    (list || []).forEach((e) => { m[e.id] = e; });
+    return m;
+  }
+
+  // -------------------------------------------------------------------
+  // Runtime
+  // -------------------------------------------------------------------
+  function Runtime(project) {
+    this.project = project;
+    this._scenes = indexById(project.scenes);
+    this._chars = indexById(project.characters);
+    this._bgs = indexById(project.backgrounds);
+    this._gauges = indexById(project.gauges);
+    this._bgm = indexById(project.bgm);
+    this._items = indexById(project.items);
+    this._endings = indexById(project.endings);
+    this.state = newState();
+    this._pending = null;
+  }
+
+  function newState() {
+    return {
+      variables: {}, gauges: {}, items: [],
+      scene_id: "", cmd_index: 0,
+      bg_id: "", blackout: false, char_id: "", expr_id: "",
+      bgm_id: "", discovered_endings: [],
+    };
+  }
+
+  Runtime.prototype.character = function (id) { return this._chars[id] || null; };
+  Runtime.prototype.expression = function (cid, eid) {
+    const ch = this._chars[cid];
+    if (!ch) return null;
+    return (ch.expressions || []).find((e) => e.id === eid) || null;
+  };
+  Runtime.prototype.background = function (id) { return this._bgs[id] || null; };
+  Runtime.prototype.gauge = function (id) { return this._gauges[id] || null; };
+  Runtime.prototype.bgmTrack = function (id) { return this._bgm[id] || null; };
+  Runtime.prototype.item = function (id) { return this._items[id] || null; };
+  Runtime.prototype.ending = function (id) { return this._endings[id] || null; };
+  Runtime.prototype.scene = function (id) { return this._scenes[id] || null; };
+
+  Runtime.prototype.start = function () {
+    const st = newState();
+    (this.project.variables || []).forEach((v) => {
+      st.variables[v.name] = initialVarValue(v);
+    });
+    (this.project.gauges || []).forEach((g) => {
+      st.gauges[g.id] = toNumber(g.initial || 0);
+    });
+    st.scene_id = (this.project.meta && this.project.meta.startScene) || "";
+    if (!st.scene_id && this.project.scenes.length) {
+      st.scene_id = this.project.scenes[0].id;
+    }
+    st.cmd_index = 0;
+    this.state = st;
+    this._pending = null;
+    return this.advance();
+  };
+
+  Runtime.prototype.loadState = function (state) {
+    this.state = state;
+    this._pending = null;
+    return this.advance();
+  };
+
+  Runtime.prototype.advance = function (textInput) {
+    if (this._pending) {
+      const kind = this._pending.kind;
+      if (kind === "nameInput") {
+        const v = this._pending.varName;
+        if (v) this.state.variables[v] = textInput || "";
+        this.state.cmd_index += 1;
+      } else if (kind === "say" || kind === "narrate") {
+        this.state.cmd_index += 1;
+      }
+      this._pending = null;
+    }
+    return this._run();
+  };
+
+  Runtime.prototype.choose = function (optionIndex) {
+    if (!this._pending || this._pending.kind !== "choice") return this._run();
+    const opts = this._pending._options_raw || [];
+    if (optionIndex >= 0 && optionIndex < opts.length) {
+      const target = opts[optionIndex].targetScene || "";
+      this._pending = null;
+      if (target) this._goto(target);
+      else this.state.cmd_index += 1;
+    } else {
+      this._pending = null;
+    }
+    return this._run();
+  };
+
+  Runtime.prototype._goto = function (sid) {
+    this.state.scene_id = sid;
+    this.state.cmd_index = 0;
+  };
+
+  Runtime.prototype._run = function () {
+    let guard = 0;
+    while (true) {
+      if (++guard > 100000) return { kind: "end", reason: "loop-guard" };
+      const scene = this.scene(this.state.scene_id);
+      if (!scene) return { kind: "end", reason: "no-scene" };
+      const cmds = scene.commands || [];
+      if (this.state.cmd_index >= cmds.length)
+        return { kind: "end", reason: "scene-finished" };
+      const cmd = cmds[this.state.cmd_index];
+      this._jumped = false;
+      const event = this._exec(cmd);
+      if (event !== null) {
+        this._pending = event;
+        return event;
+      }
+      if (!this._jumped) this.state.cmd_index += 1;
+    }
+  };
+
+  Runtime.prototype._interp = function (text) {
+    const st = this.state;
+    return String(text || "").replace(VAR_PATTERN, (m, name) => {
+      return (name in st.variables) ? String(st.variables[name]) : m;
+    });
+  };
+
+  Runtime.prototype._exec = function (cmd) {
+    const t = cmd.type;
+    const st = this.state;
+
+    if (t === "say") {
+      const ch = this.character(cmd.charId);
+      st.char_id = cmd.charId || "";
+      st.expr_id = cmd.exprId || "";
+      return {
+        kind: "say",
+        name: ch ? ch.name : "",
+        color: ch ? (ch.color || "#ffffff") : "#ffffff",
+        text: this._interp(cmd.text),
+        charId: st.char_id, exprId: st.expr_id,
+      };
+    }
+    if (t === "narrate") return { kind: "narrate", text: this._interp(cmd.text) };
+    if (t === "bg") { st.bg_id = cmd.bgId || ""; return null; }
+    if (t === "blackout") { st.blackout = (cmd.mode || "on") === "on"; return null; }
+    if (t === "bgm") {
+      st.bgm_id = (cmd.action === "stop") ? "" : (cmd.bgmId || "");
+      return null;
+    }
+    if (t === "nameInput") {
+      return { kind: "nameInput", prompt: cmd.prompt || "名前を入力",
+               varName: cmd.varName || "" };
+    }
+    if (t === "setVar") { this._applySetVar(cmd); return null; }
+    if (t === "gauge") { this._applyGauge(cmd); return null; }
+    if (t === "item") {
+      const iid = cmd.itemId || "";
+      if (iid) {
+        if (cmd.action === "remove") {
+          st.items = st.items.filter((x) => x !== iid);
+        } else if (!st.items.includes(iid)) {
+          st.items.push(iid);
+        }
+      }
+      return null;
+    }
+    if (t === "choice") return this._buildChoice(cmd);
+    if (t === "if") {
+      const ok = evaluateCondition(cmd.condition, st);
+      const target = ok ? cmd.targetTrue : cmd.targetFalse;
+      if (target) { this._goto(target); this._jumped = true; }
+      return null;
+    }
+    if (t === "jump") {
+      if (cmd.targetScene) { this._goto(cmd.targetScene); this._jumped = true; }
+      return null;
+    }
+    if (t === "ending") {
+      const end = this.ending(cmd.endingId);
+      if (end && !st.discovered_endings.includes(end.id))
+        st.discovered_endings.push(end.id);
+      return {
+        kind: "ending",
+        name: end ? end.name : "エンディング",
+        desc: end ? (end.desc || "") : "",
+        hidden: end ? !!end.hidden : false,
+      };
+    }
+    return null;
+  };
+
+  Runtime.prototype._applySetVar = function (cmd) {
+    const name = cmd.varName;
+    if (!name) return;
+    const op = cmd.op || "set";
+    const raw = cmd.value !== undefined ? cmd.value : "";
+    const st = this.state;
+    const cur = st.variables[name];
+
+    if (op === "toggle") { st.variables[name] = !cur; return; }
+    if (op === "set") {
+      if (typeof cur === "boolean") {
+        st.variables[name] = ["true", "1", "はい", "yes", "on"]
+          .includes(String(raw).trim().toLowerCase());
+      } else if (typeof cur === "number" && looksNumeric(String(raw))) {
+        st.variables[name] = toNumber(raw);
+      } else if (looksNumeric(String(raw)) &&
+                 (cur === undefined || cur === null || looksNumeric(String(cur)))) {
+        st.variables[name] = toNumber(raw);
+      } else {
+        st.variables[name] = String(raw);
+      }
+      return;
+    }
+    let base = toNumber(cur), delta = toNumber(raw);
+    if (op === "add") base += delta;
+    else if (op === "sub") base -= delta;
+    else if (op === "mul") base *= delta;
+    st.variables[name] = base;
+  };
+
+  Runtime.prototype._applyGauge = function (cmd) {
+    const g = this.gauge(cmd.gaugeId);
+    if (!g) return;
+    const op = cmd.op || "add";
+    const delta = toNumber(cmd.value);
+    const st = this.state;
+    let cur = toNumber(st.gauges[cmd.gaugeId] !== undefined
+      ? st.gauges[cmd.gaugeId] : g.initial || 0);
+    if (op === "set") cur = delta;
+    else if (op === "add") cur += delta;
+    else if (op === "sub") cur -= delta;
+    const lo = toNumber(g.min || 0), hi = toNumber(g.max || 100);
+    cur = Math.max(lo, Math.min(hi, cur));
+    st.gauges[cmd.gaugeId] = cur;
+  };
+
+  Runtime.prototype._buildChoice = function (cmd) {
+    const visible = [], raw = [];
+    (cmd.options || []).forEach((opt) => {
+      if (evaluateCondition(opt.condition, this.state)) {
+        visible.push({ text: this._interp(opt.text), index: raw.length });
+        raw.push(opt);
+      }
+    });
+    return {
+      kind: "choice",
+      prompt: this._interp(cmd.prompt),
+      options: visible,
+      _options_raw: raw,
+    };
+  };
+
+  function initialVarValue(v) {
+    const t = v.type || "string";
+    const init = v.initial;
+    if (t === "number") return toNumber(init);
+    if (t === "boolean") {
+      if (typeof init === "boolean") return init;
+      return ["true", "1", "はい", "yes", "on"].includes(
+        String(init).trim().toLowerCase());
+    }
+    return init === undefined || init === null ? "" : String(init);
+  }
+
+  const api = { Runtime, evaluateCondition, newState };
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = api;       // Node (テスト用)
+  }
+  root.NovelEngine = api;        // ブラウザ
+})(typeof window !== "undefined" ? window : globalThis);
