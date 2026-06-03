@@ -45,6 +45,8 @@ class PlayerWidget(QWidget):
         self._full_text = ""
         self._shown_chars = 0
         self._typing = False
+        self._title_mode = False
+        self._title_bg_id = ""
 
         # タイプライタ用タイマー
         self._type_timer = QTimer(self)
@@ -91,7 +93,7 @@ class PlayerWidget(QWidget):
         ml.setSpacing(6)
         for text, slot in [("セーブ", lambda: self._open_save(True)),
                            ("ロード", lambda: self._open_save(False)),
-                           ("最初から", self._restart),
+                           ("タイトル", self._to_title),
                            ("終了", self._exit)]:
             b = QPushButton(text)
             b.setObjectName("menuBtn")
@@ -184,14 +186,46 @@ class PlayerWidget(QWidget):
         self.ending_desc = QLabel("", self.ending_overlay)
         self.ending_desc.setAlignment(Qt.AlignCenter)
         self.ending_desc.setWordWrap(True)
-        end_btn = QPushButton("タイトルへ（最初から）", self.ending_overlay)
+        end_btn = QPushButton("タイトルへ戻る", self.ending_overlay)
         end_btn.setObjectName("primary")
-        end_btn.clicked.connect(self._restart)
+        end_btn.clicked.connect(self._to_title)
         el.addWidget(self.ending_badge)
         el.addWidget(self.ending_name)
         el.addWidget(self.ending_desc)
         el.addWidget(end_btn)
         self.ending_overlay.hide()
+
+        # タイトル画面オーバーレイ（はじめから / つづきから）
+        self.title_overlay = QFrame(self)
+        self.title_overlay.setObjectName("titleOverlay")
+        tl = QVBoxLayout(self.title_overlay)
+        tl.setAlignment(Qt.AlignCenter)
+        self.title_name = QLabel("", self.title_overlay)
+        self.title_name.setObjectName("titleName")
+        self.title_name.setAlignment(Qt.AlignCenter)
+        self.title_name.setWordWrap(True)
+        self.title_author = QLabel("", self.title_overlay)
+        self.title_author.setObjectName("titleAuthor")
+        self.title_author.setAlignment(Qt.AlignCenter)
+        tl.addWidget(self.title_name)
+        tl.addWidget(self.title_author)
+        tl.addSpacing(24)
+        btn_box = QVBoxLayout()
+        btn_box.setAlignment(Qt.AlignCenter)
+        self.btn_new = QPushButton("▶ はじめから", self.title_overlay)
+        self.btn_new.setObjectName("titleBtn")
+        self.btn_new.clicked.connect(self._begin_new)
+        self.btn_continue = QPushButton("⏵ つづきから", self.title_overlay)
+        self.btn_continue.setObjectName("titleBtn")
+        self.btn_continue.clicked.connect(self._begin_continue)
+        self.btn_title_exit = QPushButton("✕ 終了（エディタへ）", self.title_overlay)
+        self.btn_title_exit.setObjectName("titleBtn")
+        self.btn_title_exit.clicked.connect(self._exit)
+        for b in (self.btn_new, self.btn_continue, self.btn_title_exit):
+            b.setFixedWidth(280)
+            btn_box.addWidget(b)
+        tl.addLayout(btn_box)
+        self.title_overlay.hide()
 
         self._apply_styles()
 
@@ -218,11 +252,54 @@ class PlayerWidget(QWidget):
     # 開始 / 終了
     # ------------------------------------------------------------------
     def start(self):
+        """プレイ開始時はまずタイトル画面を表示する。"""
+        self._show_title()
+        self.setFocus()
+
+    def _show_title(self):
+        self._title_mode = True
         self._hide_all_overlays()
         self.choice_frame.hide()
-        ev = self.runtime.start()
-        self._present(ev)
-        self.setFocus()
+        # ゲーム用UIを隠す
+        self._set_game_chrome(False)
+        # タイトル情報
+        self.title_name.setText(self.project.title)
+        author = self.project.meta.get("author", "")
+        self.title_author.setText(f"作： {author}" if author else "")
+        # つづきから：セーブが1つでもあれば有効
+        self.saves.load_file()
+        has_save = any(s is not None for s in self.saves.slots)
+        self.btn_continue.setEnabled(has_save)
+        self.btn_continue.setToolTip("" if has_save else "セーブデータがありません")
+        # タイトル背景・BGM
+        self._title_bg_id = self.project.meta.get("titleBg", "")
+        self._play_bgm_id(self.project.meta.get("titleBgm", ""))
+        self.title_overlay.show()
+        self.title_overlay.raise_()
+        self.update()
+
+    def _begin_new(self):
+        self._title_mode = False
+        self.title_overlay.hide()
+        self._set_game_chrome(True)
+        self._present(self.runtime.start())
+
+    def _begin_continue(self):
+        # ロード画面を開く。ロード成功時にタイトルを抜ける。
+        self._open_save(False)
+
+    def _to_title(self):
+        """エンディング等からタイトル画面へ戻る。"""
+        self._hide_all_overlays()
+        self._show_title()
+
+    def _set_game_chrome(self, visible: bool):
+        """ゲーム中のUI（メッセージ/ゲージ/メニュー等）の表示切替。"""
+        for wdg in (self.msg_frame, self.items_btn, self.menu_frame):
+            wdg.setVisible(visible)
+        if not visible:
+            self.gauge_panel.setVisible(False)
+            self.choice_frame.hide()
 
     def _restart(self):
         self._hide_all_overlays()
@@ -234,7 +311,7 @@ class PlayerWidget(QWidget):
 
     def _hide_all_overlays(self):
         for ov in (self.name_overlay, self.items_overlay,
-                   self.save_overlay, self.ending_overlay):
+                   self.save_overlay, self.ending_overlay, self.title_overlay):
             ov.hide()
 
     # ------------------------------------------------------------------
@@ -397,11 +474,33 @@ class PlayerWidget(QWidget):
         self._pix_cache[path] = pix
         return pix
 
+    def _paint_background(self, p: QPainter, rect: QRect, bg_id: str):
+        """指定背景（画像 or 色）を rect 全体に描画する。"""
+        bg = self.project.background(bg_id) if bg_id else None
+        if bg:
+            pix = self._pixmap(bg.get("image", ""))
+            if pix is not None:
+                scaled = pix.scaled(rect.size(), Qt.KeepAspectRatioByExpanding,
+                                    Qt.SmoothTransformation)
+                x = (scaled.width() - rect.width()) // 2
+                y = (scaled.height() - rect.height()) // 2
+                p.drawPixmap(rect, scaled, QRect(x, y, rect.width(), rect.height()))
+                return
+            p.fillRect(rect, QColor(bg.get("color", "#222244")))
+            return
+        p.fillRect(rect, QColor("#101018"))
+
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.SmoothPixmapTransform)
         rect = self.rect()
         st = self.runtime.state
+
+        # タイトル画面：タイトル背景のみ描画
+        if self._title_mode:
+            self._paint_background(p, rect, self._title_bg_id)
+            p.end()
+            return
 
         # 背景
         bg = self.project.background(st.bg_id) if st.bg_id else None
@@ -471,16 +570,21 @@ class PlayerWidget(QWidget):
     # BGM
     # ------------------------------------------------------------------
     def _update_bgm(self):
+        self._play_track(self.runtime.state.bgm_id)
+
+    def _play_bgm_id(self, bgm_id: str):
+        self._play_track(bgm_id)
+
+    def _play_track(self, bgm_id: str):
         if not self._player:
             return
-        st = self.runtime.state
-        if st.bgm_id == self._cur_bgm:
+        if bgm_id == self._cur_bgm:
             return
-        self._cur_bgm = st.bgm_id
-        if not st.bgm_id:
+        self._cur_bgm = bgm_id
+        if not bgm_id:
             self._player.stop()
             return
-        track = self.project.bgm_track(st.bgm_id)
+        track = self.project.bgm_track(bgm_id)
         if not track or not track.get("path") or not os.path.exists(track["path"]):
             self._player.stop()
             return
@@ -590,6 +694,9 @@ class PlayerWidget(QWidget):
             return
         self.save_overlay.hide()
         self._hide_all_overlays()
+        # タイトル画面からの「つづきから」もここを通る
+        self._title_mode = False
+        self._set_game_chrome(True)
         ev = self.runtime.load_state(state)
         self._present(ev)
 
@@ -623,20 +730,20 @@ class PlayerWidget(QWidget):
                                       int(w * 0.6), int(h * 0.5))
         # オーバーレイ：全面
         for ov in (self.name_overlay, self.items_overlay,
-                   self.save_overlay, self.ending_overlay):
+                   self.save_overlay, self.ending_overlay, self.title_overlay):
             ov.setGeometry(0, 0, w, h)
 
     def _raise_overlays(self):
         for ov in (self.name_overlay, self.items_overlay,
-                   self.save_overlay, self.ending_overlay):
+                   self.save_overlay, self.ending_overlay, self.title_overlay):
             if ov.isVisible():
                 ov.raise_()
 
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key_Space, Qt.Key_Return, Qt.Key_Enter):
-            if not any(ov.isVisible() for ov in
+            if not self._title_mode and not any(ov.isVisible() for ov in
                        (self.name_overlay, self.items_overlay,
-                        self.save_overlay, self.ending_overlay)):
+                        self.save_overlay, self.ending_overlay, self.title_overlay)):
                 self._on_advance_click()
         super().keyPressEvent(event)
 
@@ -719,6 +826,19 @@ PlayerWidget { background:#000; }
 }
 #choiceBtn:hover { background: rgba(70,90,160,0.95); border-color:#9fe3ff; }
 #overlay { background: rgba(0,0,0,0.72); }
+#titleOverlay { background: rgba(0,0,0,0.55); }
+#titleName {
+    font-size: 44px; font-weight: bold; color: #ffffff;
+    padding: 8px 28px;
+}
+#titleAuthor { font-size: 16px; color: #cdd6f4; }
+#titleBtn {
+    background: rgba(30,36,60,0.92); border: 2px solid rgba(150,170,230,0.6);
+    border-radius: 12px; padding: 14px 24px; font-size: 18px; color: #eef;
+    margin: 6px 0;
+}
+#titleBtn:hover { background: rgba(70,90,160,0.95); border-color:#9fe3ff; }
+#titleBtn:disabled { color: #888; border-color: #444; background: rgba(20,24,40,0.6); }
 #overlayBox {
     background: #1a1e2e;
     border: 2px solid rgba(150,170,230,0.5);

@@ -12,6 +12,8 @@ import json
 import os
 import shutil
 import sys
+import tempfile
+import zipfile
 
 
 def web_dir() -> str:
@@ -102,6 +104,33 @@ def export_to_html(project_data: dict, out_dir: str) -> dict:
         "missing": missing,
         "out_dir": out_dir,
     }
+
+
+def export_to_zip(project_data: dict, zip_path: str) -> dict:
+    """Cloudflare Pages 等へそのままデプロイできる ZIP を書き出す。
+
+    ZIP のルート直下に index.html とアセットが入るため、
+    Cloudflare Pages の「直接アップロード」にドラッグするだけで公開できる。
+    """
+    tmp = tempfile.mkdtemp(prefix="nvexport_")
+    try:
+        result = export_to_html(project_data, tmp)
+        # Cloudflare Pages 用：SPAではないので特別な設定は不要。
+        # キャッシュ最適化の _headers を同梱（任意・あっても害なし）。
+        with open(os.path.join(tmp, "_headers"), "w", encoding="utf-8") as f:
+            f.write("/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n")
+
+        os.makedirs(os.path.dirname(os.path.abspath(zip_path)) or ".", exist_ok=True)
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for root, _dirs, files in os.walk(tmp):
+                for fn in files:
+                    full = os.path.join(root, fn)
+                    rel = os.path.relpath(full, tmp)  # ルート直下に配置
+                    zf.write(full, rel)
+        result["zip"] = zip_path
+        return result
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def _unique_asset_name(path: str, used: dict) -> str:

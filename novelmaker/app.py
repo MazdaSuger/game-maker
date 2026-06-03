@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import sys
+import traceback
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from . import APP_NAME
 from .model import Project
@@ -51,10 +52,33 @@ QLabel { background: transparent; }
 """
 
 
+def _install_excepthook():
+    """スロット内の未処理例外でアプリが落ちないようにする。
+
+    例外をダイアログで表示し、操作を継続できるようにする。
+    """
+    def hook(exc_type, exc, tb):
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc, tb)
+            return
+        text = "".join(traceback.format_exception(exc_type, exc, tb))
+        sys.stderr.write(text)
+        try:
+            box = QMessageBox(QMessageBox.Critical, "エラー",
+                              "予期しないエラーが発生しました。\n"
+                              "操作は継続できますが、念のため保存をおすすめします。")
+            box.setDetailedText(text)
+            box.exec()
+        except Exception:
+            pass
+    sys.excepthook = hook
+
+
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setStyleSheet(APP_QSS)
+    _install_excepthook()
 
     from .model import default_project
     window = MainWindow(Project(default_project()))

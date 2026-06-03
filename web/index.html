@@ -16,10 +16,22 @@
     <div id="menu">
       <button data-act="save">セーブ</button>
       <button data-act="load">ロード</button>
-      <button data-act="restart">最初から</button>
+      <button data-act="title">タイトル</button>
     </div>
 
     <div id="choices" style="display:none"></div>
+
+    <!-- タイトル画面（はじめから / つづきから） -->
+    <div id="ov-title" class="overlay-title hidden">
+      <div class="title-inner">
+        <div id="title-name"></div>
+        <div id="title-author"></div>
+        <div class="title-buttons">
+          <button id="btn-new" class="title-btn">▶ はじめから</button>
+          <button id="btn-continue" class="title-btn">⏵ つづきから</button>
+        </div>
+      </div>
+    </div>
 
     <div id="msgwin">
       <div id="msg-name"></div>

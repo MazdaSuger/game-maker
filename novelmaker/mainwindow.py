@@ -21,7 +21,7 @@ from .editors import (
 )
 from .player import PlayerWidget
 from .save import SaveManager, default_save_dir
-from .exporter import export_to_html
+from .exporter import export_to_html, export_to_zip
 
 PROJECT_FILTER = "ノベルメーカー プロジェクト (*.nvproj);;JSON (*.json);;すべて (*.*)"
 
@@ -52,10 +52,16 @@ class SettingsEditor(QWidget):
             lambda t: project.meta.__setitem__("author", t))
         self.start_cb = QComboBox()
         self.start_cb.currentIndexChanged.connect(self._set_start)
+        self.titlebg_cb = QComboBox()
+        self.titlebg_cb.currentIndexChanged.connect(self._set_titlebg)
+        self.titlebgm_cb = QComboBox()
+        self.titlebgm_cb.currentIndexChanged.connect(self._set_titlebgm)
 
         f.addRow("タイトル:", self.title_edit)
         f.addRow("作者:", self.author_edit)
         f.addRow("開始シーン:", self.start_cb)
+        f.addRow("タイトル画面の背景:", self.titlebg_cb)
+        f.addRow("タイトル画面のBGM:", self.titlebgm_cb)
         lay.addLayout(f)
 
         info = QLabel(
@@ -81,11 +87,40 @@ class SettingsEditor(QWidget):
                 break
         self.start_cb.blockSignals(False)
 
+        # タイトル背景・BGM
+        self._fill_combo(self.titlebg_cb,
+                         [(b["id"], b["name"]) for b in self.project.backgrounds],
+                         self.project.meta.get("titleBg", ""), "（なし）")
+        self._fill_combo(self.titlebgm_cb,
+                         [(t["id"], t["name"]) for t in self.project.bgm],
+                         self.project.meta.get("titleBgm", ""), "（なし）")
+
+    @staticmethod
+    def _fill_combo(cb, items, current, none_label):
+        cb.blockSignals(True)
+        cb.clear()
+        cb.addItem(none_label, "")
+        for value, label in items:
+            cb.addItem(label, value)
+        for i in range(cb.count()):
+            if cb.itemData(i) == current:
+                cb.setCurrentIndex(i)
+                break
+        cb.blockSignals(False)
+
     def _set_start(self, _):
         sid = self.start_cb.currentData()
         if sid:
             self.project.meta["startScene"] = sid
             self.project.dirty = True
+
+    def _set_titlebg(self, _):
+        self.project.meta["titleBg"] = self.titlebg_cb.currentData() or ""
+        self.project.dirty = True
+
+    def _set_titlebgm(self, _):
+        self.project.meta["titleBgm"] = self.titlebgm_cb.currentData() or ""
+        self.project.dirty = True
 
 
 class MainWindow(QMainWindow):
@@ -188,6 +223,9 @@ class MainWindow(QMainWindow):
         export_a = QAction("🌐 ブラウザ(HTML)に書き出し…", self)
         export_a.triggered.connect(self.export_html)
         m.addAction(export_a)
+        zip_a = QAction("☁ Cloudflare用ZIPに書き出し…", self)
+        zip_a.triggered.connect(self.export_zip)
+        m.addAction(zip_a)
         m.addSeparator()
         quit_a = QAction("終了", self)
         quit_a.triggered.connect(self.close)
@@ -252,6 +290,43 @@ class MainWindow(QMainWindow):
         if box.clickedButton() is open_btn:
             self._open_folder(out_dir)
         self.statusBar().showMessage(f"ブラウザ書き出し完了: {out_dir}", 5000)
+
+    def export_zip(self):
+        """Cloudflare Pages 等へそのままデプロイできる ZIP を書き出す。"""
+        if not self.project.scenes:
+            QMessageBox.information(self, "シーンがありません",
+                                    "先にシーンを1つ以上作成してください。")
+            return
+        default = (self.project.title or "novelgame") + "-web.zip"
+        zip_path, _ = QFileDialog.getSaveFileName(
+            self, "Cloudflare用ZIPを書き出し", default, "ZIP (*.zip)")
+        if not zip_path:
+            return
+        if not zip_path.lower().endswith(".zip"):
+            zip_path += ".zip"
+        try:
+            result = export_to_zip(self.project.data, zip_path)
+        except Exception as e:
+            QMessageBox.critical(self, "書き出し失敗", f"書き出せませんでした:\n{e}")
+            return
+        msg = (f"Cloudflare Pages 用の ZIP を書き出しました。\n\n"
+               f"ファイル: {zip_path}\n"
+               f"アセット: {result['assets']} 個\n\n"
+               "▼ デプロイ手順（Cloudflare Pages）\n"
+               "1. Cloudflare ダッシュボード → Workers & Pages → Create → Pages\n"
+               "2. 「Upload assets（直接アップロード）」を選択\n"
+               "3. この ZIP（または展開した中身）をドラッグ＆ドロップ\n"
+               "4. Deploy を押すと公開URLが発行されます\n\n"
+               "※ ZIP のルートに index.html があるため、そのまま公開できます。")
+        if result["missing"]:
+            msg += f"\n\n⚠ 見つからないファイル {len(result['missing'])} 件は除外しました。"
+        box = QMessageBox(QMessageBox.Information, "書き出し完了", msg, parent=self)
+        open_btn = box.addButton("保存先を開く", QMessageBox.ActionRole)
+        box.addButton("閉じる", QMessageBox.RejectRole)
+        box.exec()
+        if box.clickedButton() is open_btn:
+            self._open_folder(os.path.dirname(os.path.abspath(zip_path)))
+        self.statusBar().showMessage(f"Cloudflare用ZIP書き出し完了: {zip_path}", 5000)
 
     def _open_folder(self, path: str):
         from PySide6.QtGui import QDesktopServices

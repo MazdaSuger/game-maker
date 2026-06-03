@@ -11,7 +11,7 @@ import copy
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QListWidget, QListWidgetItem,
     QPushButton, QLabel, QMenu, QInputDialog, QMessageBox, QToolButton,
-    QFrame,
+    QFrame, QDialog,
 )
 from PySide6.QtCore import Qt, Signal
 
@@ -212,7 +212,7 @@ class SceneEditor(QWidget):
             return
         cmd = new_command(ctype)
         dlg = CommandDialog(cmd, self.project, self)
-        if dlg.exec() == dlg.Accepted and dlg.result_cmd:
+        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.result_cmd:
             idx = self._current_cmd_index()
             cmds = self.current_scene["commands"]
             if idx < 0:
@@ -231,7 +231,7 @@ class SceneEditor(QWidget):
             return
         cmd = self.current_scene["commands"][idx]
         dlg = CommandDialog(cmd, self.project, self)
-        if dlg.exec() == dlg.Accepted and dlg.result_cmd:
+        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.result_cmd:
             self.current_scene["commands"][idx] = dlg.result_cmd
             self._reload_commands()
             self.cmd_list.setCurrentRow(idx)

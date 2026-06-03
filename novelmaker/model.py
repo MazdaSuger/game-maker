@@ -237,6 +237,8 @@ def default_project() -> dict:
             "title": "はじめてのノベルゲーム",
             "author": "",
             "startScene": s_start,
+            "titleBg": bg_room,     # タイトル画面の背景
+            "titleBgm": bgm_main,   # タイトル画面のBGM
         },
         "variables": [
             {"id": uid("var"), "name": "playerName", "type": "string", "initial": "主人公"},
