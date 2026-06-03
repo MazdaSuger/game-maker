@@ -1,0 +1,395 @@
+"""データモデル — プロジェクト構造・コマンド定義・シリアライズ.
+
+プロジェクトは JSON 互換のプレーンな dict / list で保持する。
+これにより保存・読み込み・複製が容易になる。
+:class:`Project` はその dict をラップして検索ヘルパーを提供する。
+"""
+
+from __future__ import annotations
+
+import copy
+import itertools
+import json
+import time
+from typing import Any, Optional
+
+# ---------------------------------------------------------------------------
+# ユニークID生成
+# ---------------------------------------------------------------------------
+_counter = itertools.count(int(time.time() * 1000))
+
+
+def uid(prefix: str = "id") -> str:
+    """衝突しないユニークなIDを返す。"""
+    return f"{prefix}_{next(_counter):x}"
+
+
+# ---------------------------------------------------------------------------
+# コマンド（コンポーネント）の種類
+# ---------------------------------------------------------------------------
+# (type, 表示名, アイコン)  ※エディタの「追加」メニューと表示に使う
+COMMAND_TYPES = [
+    ("say",       "セリフ",       "💬"),
+    ("narrate",   "地の文",       "📝"),
+    ("bg",        "背景変更",     "🖼"),
+    ("blackout",  "暗転",         "🌑"),
+    ("bgm",       "BGM",          "🎵"),
+    ("nameInput", "名前入力",     "🔤"),
+    ("setVar",    "変数操作",     "🔢"),
+    ("gauge",     "ゲージ操作",   "📊"),
+    ("item",      "アイテム",     "🎒"),
+    ("choice",    "選択肢分岐",   "🔀"),
+    ("if",        "条件分岐",     "❓"),
+    ("jump",      "シーン移動",   "➡"),
+    ("ending",    "エンディング", "🏁"),
+]
+
+COMMAND_LABELS = {t: label for t, label, _ in COMMAND_TYPES}
+COMMAND_ICONS = {t: icon for t, _, icon in COMMAND_TYPES}
+
+# 変数操作の演算子
+VAR_OPS = [("set", "代入 ="), ("add", "加算 +="), ("sub", "減算 -="),
+           ("mul", "乗算 *="), ("toggle", "反転(真偽)")]
+# ゲージ操作の演算子
+GAUGE_OPS = [("set", "代入 ="), ("add", "加算 +="), ("sub", "減算 -=")]
+
+
+def empty_condition() -> dict:
+    """空の条件式を返す。terms が空なら常に真として扱う。"""
+    return {"logic": "and", "terms": []}
+
+
+def new_term(kind: str = "var") -> dict:
+    """新しい条件の項を返す。"""
+    if kind == "item":
+        return {"kind": "item", "ref": "", "op": "has", "value": ""}
+    return {"kind": kind, "ref": "", "op": "==", "value": "0"}
+
+
+def new_command(ctype: str) -> dict:
+    """指定タイプのコマンド初期値を返す。"""
+    base = {"id": uid("cmd"), "type": ctype}
+    if ctype == "say":
+        base.update(charId="", exprId="", text="")
+    elif ctype == "narrate":
+        base.update(text="")
+    elif ctype == "bg":
+        base.update(bgId="")
+    elif ctype == "blackout":
+        base.update(mode="on")  # on=暗転 / off=解除
+    elif ctype == "bgm":
+        base.update(action="play", bgmId="", loop=True)
+    elif ctype == "nameInput":
+        base.update(varName="", prompt="名前を入力してください")
+    elif ctype == "setVar":
+        base.update(varName="", op="set", value="0")
+    elif ctype == "gauge":
+        base.update(gaugeId="", op="add", value="1")
+    elif ctype == "item":
+        base.update(itemId="", action="add")  # add / remove
+    elif ctype == "choice":
+        base.update(prompt="", options=[
+            {"id": uid("opt"), "text": "選択肢1", "targetScene": "",
+             "condition": empty_condition()},
+            {"id": uid("opt"), "text": "選択肢2", "targetScene": "",
+             "condition": empty_condition()},
+        ])
+    elif ctype == "if":
+        base.update(condition=empty_condition(), targetTrue="", targetFalse="")
+    elif ctype == "jump":
+        base.update(targetScene="")
+    elif ctype == "ending":
+        base.update(endingId="")
+    return base
+
+
+# ---------------------------------------------------------------------------
+# Project ラッパー
+# ---------------------------------------------------------------------------
+class Project:
+    """プロジェクトデータ(dict)のラッパー。検索/操作ヘルパーを提供。"""
+
+    def __init__(self, data: Optional[dict] = None):
+        self.data: dict = data if data is not None else default_project()
+        self.path: Optional[str] = None  # 保存先ファイルパス
+        self.dirty: bool = False         # 未保存の変更があるか
+
+    # --- メタ ---------------------------------------------------------
+    @property
+    def meta(self) -> dict:
+        return self.data["meta"]
+
+    @property
+    def title(self) -> str:
+        return self.meta.get("title", "無題")
+
+    # --- 各リストへのアクセス ----------------------------------------
+    @property
+    def variables(self) -> list:
+        return self.data["variables"]
+
+    @property
+    def gauges(self) -> list:
+        return self.data["gauges"]
+
+    @property
+    def characters(self) -> list:
+        return self.data["characters"]
+
+    @property
+    def items(self) -> list:
+        return self.data["items"]
+
+    @property
+    def backgrounds(self) -> list:
+        return self.data["backgrounds"]
+
+    @property
+    def bgm(self) -> list:
+        return self.data["bgm"]
+
+    @property
+    def endings(self) -> list:
+        return self.data["endings"]
+
+    @property
+    def scenes(self) -> list:
+        return self.data["scenes"]
+
+    # --- ID 検索 ------------------------------------------------------
+    @staticmethod
+    def _find(lst: list, _id: str) -> Optional[dict]:
+        for e in lst:
+            if e.get("id") == _id:
+                return e
+        return None
+
+    def character(self, cid: str) -> Optional[dict]:
+        return self._find(self.characters, cid)
+
+    def expression(self, cid: str, eid: str) -> Optional[dict]:
+        ch = self.character(cid)
+        if not ch:
+            return None
+        return self._find(ch.get("expressions", []), eid)
+
+    def item(self, iid: str) -> Optional[dict]:
+        return self._find(self.items, iid)
+
+    def background(self, bid: str) -> Optional[dict]:
+        return self._find(self.backgrounds, bid)
+
+    def gauge(self, gid: str) -> Optional[dict]:
+        return self._find(self.gauges, gid)
+
+    def bgm_track(self, bid: str) -> Optional[dict]:
+        return self._find(self.bgm, bid)
+
+    def ending(self, eid: str) -> Optional[dict]:
+        return self._find(self.endings, eid)
+
+    def scene(self, sid: str) -> Optional[dict]:
+        return self._find(self.scenes, sid)
+
+    def variable(self, name: str) -> Optional[dict]:
+        for v in self.variables:
+            if v.get("name") == name:
+                return v
+        return None
+
+    # --- 名前ヘルパー（UI 表示用） ------------------------------------
+    def scene_name(self, sid: str) -> str:
+        s = self.scene(sid)
+        return s["name"] if s else "（未設定）"
+
+    def character_name(self, cid: str) -> str:
+        c = self.character(cid)
+        return c["name"] if c else ""
+
+    # --- シリアライズ -------------------------------------------------
+    def to_json(self) -> str:
+        return json.dumps(self.data, ensure_ascii=False, indent=2)
+
+    @classmethod
+    def from_json(cls, text: str) -> "Project":
+        return cls(json.loads(text))
+
+    def clone_data(self) -> dict:
+        return copy.deepcopy(self.data)
+
+
+# ---------------------------------------------------------------------------
+# デフォルト（サンプル）プロジェクト
+# ---------------------------------------------------------------------------
+def default_project() -> dict:
+    hero = uid("char")
+    e_normal, e_smile, e_sad = uid("expr"), uid("expr"), uid("expr")
+    bg_room, bg_night = uid("bg"), uid("bg")
+    bgm_main = uid("bgm")
+    g_aff = uid("gauge")
+    it_key = uid("item")
+    end_true, end_normal, end_secret = uid("end"), uid("end"), uid("end")
+    s_start, s_a, s_b, s_end = uid("scene"), uid("scene"), uid("scene"), uid("scene")
+    s_true, s_normal, s_secret = uid("scene"), uid("scene"), uid("scene")
+
+    return {
+        "meta": {
+            "title": "はじめてのノベルゲーム",
+            "author": "",
+            "startScene": s_start,
+        },
+        "variables": [
+            {"id": uid("var"), "name": "playerName", "type": "string", "initial": "主人公"},
+            {"id": uid("var"), "name": "flag_secret", "type": "boolean", "initial": False},
+        ],
+        "gauges": [
+            {"id": g_aff, "name": "好感度", "min": 0, "max": 100,
+             "initial": 50, "color": "#ff6b9d", "show": True},
+        ],
+        "characters": [
+            {"id": hero, "name": "ヒロイン", "color": "#ffb6c1", "expressions": [
+                {"id": e_normal, "name": "通常", "image": ""},
+                {"id": e_smile, "name": "笑顔", "image": ""},
+                {"id": e_sad, "name": "悲しい", "image": ""},
+            ]},
+        ],
+        "items": [
+            {"id": it_key, "name": "古い鍵", "desc": "何かを開けられそうだ", "icon": "🔑"},
+        ],
+        "backgrounds": [
+            {"id": bg_room, "name": "部屋", "image": "", "color": "#3a4a6b"},
+            {"id": bg_night, "name": "夜の街", "image": "", "color": "#1a1a3a"},
+        ],
+        "bgm": [
+            {"id": bgm_main, "name": "メインテーマ", "path": "", "loop": True},
+        ],
+        "endings": [
+            {"id": end_true, "name": "トゥルーエンド", "hidden": False,
+             "desc": "二人は末永く幸せに暮らした。"},
+            {"id": end_normal, "name": "ノーマルエンド", "hidden": False,
+             "desc": "物語は静かに幕を閉じた。"},
+            {"id": end_secret, "name": "裏エンド：真実", "hidden": True,
+             "desc": "隠されていた真実が、いま明らかになる――。"},
+        ],
+        "scenes": [
+            {"id": s_start, "name": "オープニング", "commands": [
+                {"id": uid("cmd"), "type": "bg", "bgId": bg_room},
+                {"id": uid("cmd"), "type": "bgm", "action": "play",
+                 "bgmId": bgm_main, "loop": True},
+                {"id": uid("cmd"), "type": "narrate", "text": "ある晴れた日のことだった。"},
+                {"id": uid("cmd"), "type": "nameInput", "varName": "playerName",
+                 "prompt": "あなたの名前は？"},
+                {"id": uid("cmd"), "type": "say", "charId": hero, "exprId": e_smile,
+                 "text": "はじめまして、{playerName}さん！"},
+                {"id": uid("cmd"), "type": "choice", "prompt": "どう答える？", "options": [
+                    {"id": uid("opt"), "text": "笑顔で挨拶する",
+                     "targetScene": s_a, "condition": empty_condition()},
+                    {"id": uid("opt"), "text": "そっけなく返す",
+                     "targetScene": s_b, "condition": empty_condition()},
+                ]},
+            ]},
+            {"id": s_a, "name": "好感ルート", "commands": [
+                {"id": uid("cmd"), "type": "say", "charId": hero, "exprId": e_smile,
+                 "text": "えへへ、嬉しいな。"},
+                {"id": uid("cmd"), "type": "gauge", "gaugeId": g_aff, "op": "add", "value": "20"},
+                {"id": uid("cmd"), "type": "item", "itemId": it_key, "action": "add"},
+                {"id": uid("cmd"), "type": "jump", "targetScene": s_end},
+            ]},
+            {"id": s_b, "name": "冷淡ルート", "commands": [
+                {"id": uid("cmd"), "type": "say", "charId": hero, "exprId": e_sad,
+                 "text": "……そっか。"},
+                {"id": uid("cmd"), "type": "gauge", "gaugeId": g_aff, "op": "sub", "value": "20"},
+                {"id": uid("cmd"), "type": "jump", "targetScene": s_end},
+            ]},
+            {"id": s_end, "name": "エンディング分岐", "commands": [
+                {"id": uid("cmd"), "type": "blackout", "mode": "on"},
+                {"id": uid("cmd"), "type": "bg", "bgId": bg_night},
+                {"id": uid("cmd"), "type": "blackout", "mode": "off"},
+                {"id": uid("cmd"), "type": "narrate", "text": "こうして物語は終わりを迎える。"},
+                # 好感度70以上 かつ 鍵所持 → 裏エンドへジャンプ
+                {"id": uid("cmd"), "type": "if", "condition": {
+                    "logic": "and", "terms": [
+                        {"kind": "gauge", "ref": g_aff, "op": ">=", "value": "70"},
+                        {"kind": "item", "ref": it_key, "op": "has", "value": ""},
+                    ]},
+                 "targetTrue": s_secret, "targetFalse": ""},
+                # 好感度60以上 → トゥルー / それ未満 → ノーマル
+                {"id": uid("cmd"), "type": "if", "condition": {
+                    "logic": "and", "terms": [
+                        {"kind": "gauge", "ref": g_aff, "op": ">=", "value": "60"},
+                    ]},
+                 "targetTrue": s_true, "targetFalse": s_normal},
+            ]},
+            {"id": s_true, "name": "[END] トゥルー", "commands": [
+                {"id": uid("cmd"), "type": "ending", "endingId": end_true},
+            ]},
+            {"id": s_normal, "name": "[END] ノーマル", "commands": [
+                {"id": uid("cmd"), "type": "ending", "endingId": end_normal},
+            ]},
+            {"id": s_secret, "name": "[END] 裏エンド", "commands": [
+                {"id": uid("cmd"), "type": "say", "charId": hero, "exprId": e_normal,
+                 "text": "……実はね、ずっと言えなかったことがあるの。"},
+                {"id": uid("cmd"), "type": "setVar", "varName": "flag_secret",
+                 "op": "set", "value": "true"},
+                {"id": uid("cmd"), "type": "ending", "endingId": end_secret},
+            ]},
+        ],
+    }
+
+
+def _short(text: str, n: int = 40) -> str:
+    text = (text or "").replace("\n", " ")
+    return text if len(text) <= n else text[: n - 1] + "…"
+
+
+def describe_command(cmd: dict, project: "Project") -> str:
+    """コマンドを一覧表示用の1行テキストに要約する。"""
+    t = cmd.get("type")
+    if t == "say":
+        ch = project.character(cmd.get("charId", ""))
+        name = ch["name"] if ch else "（地の文）"
+        return f"{name}「{_short(cmd.get('text',''))}」"
+    if t == "narrate":
+        return f"{_short(cmd.get('text',''))}"
+    if t == "bg":
+        bg = project.background(cmd.get("bgId", ""))
+        return f"背景 → {bg['name'] if bg else '（未設定）'}"
+    if t == "blackout":
+        return "暗転する" if cmd.get("mode") == "on" else "暗転を解除"
+    if t == "bgm":
+        if cmd.get("action") == "stop":
+            return "BGM停止"
+        bgm = project.bgm_track(cmd.get("bgmId", ""))
+        loop = "（ループ）" if cmd.get("loop", True) else ""
+        return f"BGM再生 → {bgm['name'] if bgm else '（未設定）'}{loop}"
+    if t == "nameInput":
+        return f"名前入力 → 変数「{cmd.get('varName','?')}」"
+    if t == "setVar":
+        op_map = dict(VAR_OPS)
+        return f"変数 {cmd.get('varName','?')} {op_map.get(cmd.get('op'),'')} {cmd.get('value','')}"
+    if t == "gauge":
+        g = project.gauge(cmd.get("gaugeId", ""))
+        op_map = dict(GAUGE_OPS)
+        return f"ゲージ「{g['name'] if g else '?'}」 {op_map.get(cmd.get('op'),'')} {cmd.get('value','')}"
+    if t == "item":
+        it = project.item(cmd.get("itemId", ""))
+        act = "入手" if cmd.get("action") == "add" else "破棄"
+        return f"アイテム {act} → {it['name'] if it else '（未設定）'}"
+    if t == "choice":
+        opts = cmd.get("options", [])
+        return f"選択肢分岐（{len(opts)}択）" + (f"：{_short(cmd.get('prompt',''),20)}" if cmd.get("prompt") else "")
+    if t == "if":
+        n = len(cmd.get("condition", {}).get("terms", []))
+        return f"条件分岐（{n}件の条件）"
+    if t == "jump":
+        return f"シーン移動 → {project.scene_name(cmd.get('targetScene',''))}"
+    if t == "ending":
+        e = project.ending(cmd.get("endingId", ""))
+        lock = "🔒" if (e and e.get("hidden")) else ""
+        return f"エンディング → {lock}{e['name'] if e else '（未設定）'}"
+    return t or "?"
+
+
+def make_save_meta(project: Project) -> dict:
+    """新規保存用の最小メタ情報。"""
+    return {"savedAt": time.strftime("%Y-%m-%d %H:%M:%S")}

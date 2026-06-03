@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# 実行時に生成されるセーブデータ・プロジェクト
+*.saves.json
+/saves/
+*.nvproj
+!examples/*.nvproj
+
+.DS_Store
+*.swp

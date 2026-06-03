@@ -1,0 +1,747 @@
+"""プレイヤーウィジェット — 作成したノベルゲームを実行/テストプレイする.
+
+背景・立ち絵・暗転・メッセージ・選択肢・名前入力・ゲージ表示・
+アイテム表示・エンディング・BGM・10スロットセーブを扱う。
+:class:`Runtime` を駆動し、返るイベントに応じて画面を更新する。
+"""
+
+from __future__ import annotations
+
+import os
+
+from PySide6.QtWidgets import (
+    QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QLineEdit,
+    QFrame, QGridLayout, QScrollArea, QSizePolicy,
+)
+from PySide6.QtCore import Qt, QTimer, QRect, Signal
+from PySide6.QtGui import QPainter, QColor, QPixmap, QFont, QFontMetrics
+
+from .model import Project
+from .runtime import Runtime, GameState
+from .save import SaveManager
+
+# BGM（任意・環境に無ければ無音で続行）
+try:
+    from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
+    from PySide6.QtCore import QUrl
+    _HAS_AUDIO = True
+except Exception:  # pragma: no cover
+    _HAS_AUDIO = False
+
+
+class PlayerWidget(QWidget):
+    exited = Signal()
+
+    def __init__(self, project: Project, save_manager: SaveManager, parent=None):
+        super().__init__(parent)
+        self.project = project
+        self.saves = save_manager
+        self.runtime = Runtime(project)
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.setMinimumSize(800, 500)
+
+        self._pix_cache: dict[str, QPixmap] = {}
+        self._current_event = None
+        self._full_text = ""
+        self._shown_chars = 0
+        self._typing = False
+
+        # タイプライタ用タイマー
+        self._type_timer = QTimer(self)
+        self._type_timer.setInterval(22)
+        self._type_timer.timeout.connect(self._tick_type)
+
+        # BGM
+        self._audio = None
+        self._player = None
+        self._cur_bgm = None
+        if _HAS_AUDIO:
+            try:
+                self._audio = QAudioOutput()
+                self._player = QMediaPlayer()
+                self._player.setAudioOutput(self._audio)
+            except Exception:
+                self._player = None
+
+        self._build_ui()
+
+    # ------------------------------------------------------------------
+    # UI 構築
+    # ------------------------------------------------------------------
+    def _build_ui(self):
+        # ゲージ表示
+        self.gauge_panel = QFrame(self)
+        self.gauge_panel.setObjectName("gaugePanel")
+        self.gauge_panel.setFixedWidth(206)
+        self.gauge_layout = QVBoxLayout(self.gauge_panel)
+        self.gauge_layout.setContentsMargins(10, 8, 10, 8)
+        self.gauge_layout.setSpacing(4)
+
+        # アイテムボタン
+        self.items_btn = QPushButton("🎒", self)
+        self.items_btn.setObjectName("itemsBtn")
+        self.items_btn.setFixedSize(44, 44)
+        self.items_btn.setToolTip("所持アイテム")
+        self.items_btn.clicked.connect(self._show_items)
+
+        # メニューボタン群
+        self.menu_frame = QFrame(self)
+        ml = QHBoxLayout(self.menu_frame)
+        ml.setContentsMargins(0, 0, 0, 0)
+        ml.setSpacing(6)
+        for text, slot in [("セーブ", lambda: self._open_save(True)),
+                           ("ロード", lambda: self._open_save(False)),
+                           ("最初から", self._restart),
+                           ("終了", self._exit)]:
+            b = QPushButton(text)
+            b.setObjectName("menuBtn")
+            b.clicked.connect(slot)
+            ml.addWidget(b)
+
+        # メッセージウィンドウ
+        self.msg_frame = QFrame(self)
+        self.msg_frame.setObjectName("msgWin")
+        mv = QVBoxLayout(self.msg_frame)
+        mv.setContentsMargins(24, 14, 24, 16)
+        self.name_label = QLabel("", self.msg_frame)
+        self.name_label.setObjectName("nameLabel")
+        self.text_label = QLabel("", self.msg_frame)
+        self.text_label.setObjectName("msgText")
+        self.text_label.setWordWrap(True)
+        self.text_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        mv.addWidget(self.name_label)
+        mv.addWidget(self.text_label, 1)
+        self.msg_frame.mousePressEvent = lambda ev: self._on_advance_click()
+
+        # 選択肢コンテナ
+        self.choice_frame = QFrame(self)
+        self.choice_layout = QVBoxLayout(self.choice_frame)
+        self.choice_layout.setAlignment(Qt.AlignCenter)
+        self.choice_frame.hide()
+
+        # 名前入力オーバーレイ
+        self.name_overlay = self._make_overlay()
+        nl = self.name_overlay.box_layout
+        self.name_prompt = QLabel("", self.name_overlay)
+        self.name_prompt.setObjectName("overlayTitle")
+        self.name_field = QLineEdit(self.name_overlay)
+        self.name_field.setMaxLength(16)
+        self.name_field.returnPressed.connect(self._submit_name)
+        name_ok = QPushButton("決定", self.name_overlay)
+        name_ok.setObjectName("primary")
+        name_ok.clicked.connect(self._submit_name)
+        nl.addWidget(self.name_prompt)
+        nl.addWidget(self.name_field)
+        nl.addWidget(name_ok)
+        self.name_overlay.hide()
+
+        # アイテムオーバーレイ
+        self.items_overlay = self._make_overlay(wide=True)
+        il = self.items_overlay.box_layout
+        title = QLabel("所持アイテム", self.items_overlay)
+        title.setObjectName("overlayTitle")
+        il.addWidget(title)
+        self.items_scroll = QScrollArea(self.items_overlay)
+        self.items_scroll.setWidgetResizable(True)
+        self.items_scroll.setFrameShape(QFrame.NoFrame)
+        self.items_inner = QWidget()
+        self.items_inner_layout = QVBoxLayout(self.items_inner)
+        self.items_scroll.setWidget(self.items_inner)
+        il.addWidget(self.items_scroll, 1)
+        close_items = QPushButton("閉じる", self.items_overlay)
+        close_items.clicked.connect(self.items_overlay.hide)
+        il.addWidget(close_items)
+        self.items_overlay.hide()
+
+        # セーブ/ロードオーバーレイ
+        self.save_overlay = self._make_overlay(wide=True)
+        sl = self.save_overlay.box_layout
+        self.save_title = QLabel("セーブ", self.save_overlay)
+        self.save_title.setObjectName("overlayTitle")
+        sl.addWidget(self.save_title)
+        self.slots_scroll = QScrollArea(self.save_overlay)
+        self.slots_scroll.setWidgetResizable(True)
+        self.slots_scroll.setFrameShape(QFrame.NoFrame)
+        self.slots_inner = QWidget()
+        self.slots_layout = QVBoxLayout(self.slots_inner)
+        self.slots_scroll.setWidget(self.slots_inner)
+        sl.addWidget(self.slots_scroll, 1)
+        close_save = QPushButton("閉じる", self.save_overlay)
+        close_save.clicked.connect(self.save_overlay.hide)
+        sl.addWidget(close_save)
+        self.save_overlay.hide()
+
+        # エンディングオーバーレイ
+        self.ending_overlay = self._make_overlay()
+        el = self.ending_overlay.box_layout
+        self.ending_badge = QLabel("", self.ending_overlay)
+        self.ending_badge.setObjectName("endingBadge")
+        self.ending_badge.setAlignment(Qt.AlignCenter)
+        self.ending_name = QLabel("", self.ending_overlay)
+        self.ending_name.setObjectName("endingName")
+        self.ending_name.setAlignment(Qt.AlignCenter)
+        self.ending_name.setWordWrap(True)
+        self.ending_desc = QLabel("", self.ending_overlay)
+        self.ending_desc.setAlignment(Qt.AlignCenter)
+        self.ending_desc.setWordWrap(True)
+        end_btn = QPushButton("タイトルへ（最初から）", self.ending_overlay)
+        end_btn.setObjectName("primary")
+        end_btn.clicked.connect(self._restart)
+        el.addWidget(self.ending_badge)
+        el.addWidget(self.ending_name)
+        el.addWidget(self.ending_desc)
+        el.addWidget(end_btn)
+        self.ending_overlay.hide()
+
+        self._apply_styles()
+
+    def _make_overlay(self, wide=False):
+        ov = QFrame(self)
+        ov.setObjectName("overlay")
+        lay = QVBoxLayout(ov)
+        lay.setAlignment(Qt.AlignCenter)
+        box = QFrame(ov)
+        box.setObjectName("overlayBox")
+        box.setMaximumWidth(640 if wide else 460)
+        box.setMinimumWidth(420 if wide else 360)
+        bl = QVBoxLayout(box)
+        bl.setContentsMargins(24, 24, 24, 24)
+        bl.setSpacing(12)
+        lay.addWidget(box)
+        ov.box_layout = bl  # 後から中身を追加するため公開
+        return ov
+
+    def _apply_styles(self):
+        self.setStyleSheet(PLAYER_QSS)
+
+    # ------------------------------------------------------------------
+    # 開始 / 終了
+    # ------------------------------------------------------------------
+    def start(self):
+        self._hide_all_overlays()
+        self.choice_frame.hide()
+        ev = self.runtime.start()
+        self._present(ev)
+        self.setFocus()
+
+    def _restart(self):
+        self._hide_all_overlays()
+        self.start()
+
+    def _exit(self):
+        self._stop_bgm()
+        self.exited.emit()
+
+    def _hide_all_overlays(self):
+        for ov in (self.name_overlay, self.items_overlay,
+                   self.save_overlay, self.ending_overlay):
+            ov.hide()
+
+    # ------------------------------------------------------------------
+    # イベント提示
+    # ------------------------------------------------------------------
+    def _present(self, ev: dict):
+        self._current_event = ev
+        self._update_stage()
+        kind = ev.get("kind")
+
+        self.choice_frame.hide()
+
+        if kind in ("say", "narrate"):
+            self.msg_frame.show()
+            if kind == "say":
+                self.name_label.setText(ev.get("name", ""))
+                self.name_label.setStyleSheet(
+                    f'color:{ev.get("color", "#fff")};')
+                self.name_label.setVisible(bool(ev.get("name")))
+            else:
+                self.name_label.setVisible(False)
+            self._start_typewriter(ev.get("text", ""))
+
+        elif kind == "choice":
+            self.msg_frame.setVisible(bool(ev.get("prompt")))
+            if ev.get("prompt"):
+                self.name_label.setVisible(False)
+                self._start_typewriter(ev.get("prompt", ""))
+            self._show_choices(ev)
+
+        elif kind == "nameInput":
+            self.name_prompt.setText(ev.get("prompt", "名前を入力"))
+            self.name_field.setText("")
+            self.name_overlay.show()
+            self._raise_overlays()
+            self.name_field.setFocus()
+
+        elif kind == "ending":
+            self._show_ending(ev)
+
+        elif kind == "end":
+            self.msg_frame.show()
+            self.name_label.setVisible(False)
+            self._start_typewriter("― おわり ―")
+
+        self._layout_children()
+
+    # --- タイプライタ ---
+    def _start_typewriter(self, text: str):
+        self._full_text = text
+        self._shown_chars = 0
+        self._typing = True
+        self.text_label.setText("")
+        self._type_timer.start()
+
+    def _tick_type(self):
+        self._shown_chars += 1
+        if self._shown_chars >= len(self._full_text):
+            self.text_label.setText(self._full_text)
+            self._typing = False
+            self._type_timer.stop()
+        else:
+            self.text_label.setText(self._full_text[: self._shown_chars])
+
+    def _finish_typewriter(self):
+        self._type_timer.stop()
+        self._typing = False
+        self.text_label.setText(self._full_text)
+
+    # --- クリックで進める ---
+    def _on_advance_click(self):
+        ev = self._current_event or {}
+        kind = ev.get("kind")
+        if kind not in ("say", "narrate", "end"):
+            return
+        if self._typing:
+            self._finish_typewriter()
+            return
+        if kind == "end":
+            return  # 終端では進めない
+        self._present(self.runtime.advance())
+
+    # --- 選択肢 ---
+    def _show_choices(self, ev: dict):
+        # 既存のボタンを掃除
+        while self.choice_layout.count():
+            it = self.choice_layout.takeAt(0)
+            if it.widget():
+                it.widget().setParent(None)
+        for opt in ev.get("options", []):
+            b = QPushButton(opt["text"], self.choice_frame)
+            b.setObjectName("choiceBtn")
+            idx = opt["index"]
+            b.clicked.connect(lambda checked=False, i=idx: self._choose(i))
+            self.choice_layout.addWidget(b)
+        if not ev.get("options"):
+            lbl = QLabel("（選択できる項目がありません）", self.choice_frame)
+            self.choice_layout.addWidget(lbl)
+            skip = QPushButton("続ける", self.choice_frame)
+            skip.clicked.connect(lambda: self._present(self.runtime.choose(-1)))
+            self.choice_layout.addWidget(skip)
+        self.choice_frame.show()
+        self.choice_frame.raise_()
+
+    def _choose(self, index: int):
+        self.choice_frame.hide()
+        self._present(self.runtime.choose(index))
+
+    # --- 名前入力 ---
+    def _submit_name(self):
+        text = self.name_field.text().strip() or "名無し"
+        self.name_overlay.hide()
+        self._present(self.runtime.advance(text))
+
+    # --- エンディング ---
+    def _show_ending(self, ev: dict):
+        self.msg_frame.hide()
+        hidden = ev.get("hidden", False)
+        self.ending_badge.setText("🔒 裏エンディング 🔒" if hidden else "★ ENDING ★")
+        self.ending_badge.setStyleSheet(
+            "color:#ffd56b;" if hidden else "color:#9fe3ff;")
+        self.ending_name.setText(ev.get("name", ""))
+        self.ending_desc.setText(ev.get("desc", ""))
+        self.ending_overlay.show()
+        self._raise_overlays()
+
+    # ------------------------------------------------------------------
+    # ステージ描画
+    # ------------------------------------------------------------------
+    def _update_stage(self):
+        self._update_gauges()
+        self._update_bgm()
+        self.update()  # paintEvent
+
+    def _update_gauges(self):
+        # クリア
+        while self.gauge_layout.count():
+            it = self.gauge_layout.takeAt(0)
+            if it.widget():
+                it.widget().setParent(None)
+        st = self.runtime.state
+        shown = False
+        for g in self.project.gauges:
+            if not g.get("show", True):
+                continue
+            shown = True
+            val = st.gauges.get(g["id"], g.get("initial", 0))
+            row = _GaugeBar(g, val, self.gauge_panel)
+            self.gauge_layout.addWidget(row)
+        self.gauge_panel.setVisible(shown)
+
+    def _pixmap(self, path: str):
+        if not path:
+            return None
+        if path in self._pix_cache:
+            return self._pix_cache[path]
+        pix = QPixmap(path) if os.path.exists(path) else None
+        if pix is not None and pix.isNull():
+            pix = None
+        self._pix_cache[path] = pix
+        return pix
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.SmoothPixmapTransform)
+        rect = self.rect()
+        st = self.runtime.state
+
+        # 背景
+        bg = self.project.background(st.bg_id) if st.bg_id else None
+        drew_bg = False
+        if bg:
+            pix = self._pixmap(bg.get("image", ""))
+            if pix is not None:
+                scaled = pix.scaled(rect.size(), Qt.KeepAspectRatioByExpanding,
+                                    Qt.SmoothTransformation)
+                x = (scaled.width() - rect.width()) // 2
+                y = (scaled.height() - rect.height()) // 2
+                p.drawPixmap(rect, scaled, QRect(x, y, rect.width(), rect.height()))
+                drew_bg = True
+            if not drew_bg:
+                p.fillRect(rect, QColor(bg.get("color", "#222244")))
+                drew_bg = True
+        if not drew_bg:
+            p.fillRect(rect, QColor("#101018"))
+
+        # 立ち絵（暗転中は描かない）
+        if not st.blackout and st.char_id:
+            self._paint_character(p, rect, st)
+
+        # 暗転
+        if st.blackout:
+            p.fillRect(rect, QColor(0, 0, 0))
+
+        p.end()
+
+    def _paint_character(self, p: QPainter, rect: QRect, st: GameState):
+        ch = self.project.character(st.char_id)
+        if not ch:
+            return
+        ex = self.project.expression(st.char_id, st.expr_id)
+        pix = self._pixmap(ex.get("image", "")) if ex else None
+        avail_h = int(rect.height() * 0.78)
+        if pix is not None:
+            scaled = pix.scaledToHeight(avail_h, Qt.SmoothTransformation)
+            x = (rect.width() - scaled.width()) // 2
+            y = rect.height() - scaled.height() - self._msg_height() + 10
+            p.drawPixmap(x, y, scaled)
+        else:
+            # プレースホルダ（色付き矩形＋名前/表情）
+            w = int(rect.width() * 0.22)
+            h = avail_h
+            x = (rect.width() - w) // 2
+            y = rect.height() - h - self._msg_height() + 10
+            color = QColor(ch.get("color", "#888888"))
+            color.setAlpha(70)
+            p.setBrush(color)
+            p.setPen(QColor(ch.get("color", "#888888")))
+            p.drawRoundedRect(x, y, w, h, 16, 16)
+            p.setPen(QColor("#ffffff"))
+            font = QFont()
+            font.setPointSize(14)
+            font.setBold(True)
+            p.setFont(font)
+            label = ch.get("name", "")
+            if ex:
+                label += f'\n（{ex.get("name","")}）'
+            p.drawText(QRect(x, y, w, h), Qt.AlignCenter | Qt.TextWordWrap, label)
+
+    def _msg_height(self) -> int:
+        return max(150, int(self.height() * 0.26))
+
+    # ------------------------------------------------------------------
+    # BGM
+    # ------------------------------------------------------------------
+    def _update_bgm(self):
+        if not self._player:
+            return
+        st = self.runtime.state
+        if st.bgm_id == self._cur_bgm:
+            return
+        self._cur_bgm = st.bgm_id
+        if not st.bgm_id:
+            self._player.stop()
+            return
+        track = self.project.bgm_track(st.bgm_id)
+        if not track or not track.get("path") or not os.path.exists(track["path"]):
+            self._player.stop()
+            return
+        try:
+            self._player.setSource(QUrl.fromLocalFile(track["path"]))
+            self._player.setLoops(QMediaPlayer.Infinite if track.get("loop", True) else 1)
+            self._audio.setVolume(0.7)
+            self._player.play()
+        except Exception:
+            pass
+
+    def _stop_bgm(self):
+        if self._player:
+            try:
+                self._player.stop()
+            except Exception:
+                pass
+        self._cur_bgm = None
+
+    # ------------------------------------------------------------------
+    # アイテム表示
+    # ------------------------------------------------------------------
+    def _show_items(self):
+        while self.items_inner_layout.count():
+            it = self.items_inner_layout.takeAt(0)
+            if it.widget():
+                it.widget().setParent(None)
+        st = self.runtime.state
+        if not st.items:
+            self.items_inner_layout.addWidget(QLabel("（所持アイテムはありません）"))
+        for iid in st.items:
+            item = self.project.item(iid)
+            if not item:
+                continue
+            row = QFrame()
+            row.setObjectName("itemRow")
+            rl = QHBoxLayout(row)
+            icon = QLabel(item.get("icon", "📦"))
+            icon.setStyleSheet("font-size:22px;")
+            name = QLabel(f'<b>{item["name"]}</b><br><span style="color:#bbb">'
+                          f'{item.get("desc","")}</span>')
+            name.setWordWrap(True)
+            rl.addWidget(icon)
+            rl.addWidget(name, 1)
+            self.items_inner_layout.addWidget(row)
+        self.items_inner_layout.addStretch()
+        self.items_overlay.show()
+        self._raise_overlays()
+
+    # ------------------------------------------------------------------
+    # セーブ / ロード
+    # ------------------------------------------------------------------
+    def _open_save(self, saving: bool):
+        self._save_mode = saving
+        self.save_title.setText("セーブ（スロットを選択）" if saving else "ロード（スロットを選択）")
+        self.saves.load_file()
+        while self.slots_layout.count():
+            it = self.slots_layout.takeAt(0)
+            if it.widget():
+                it.widget().setParent(None)
+        for i in range(len(self.saves.slots)):
+            self.slots_layout.addWidget(self._make_slot_row(i, saving))
+        self.slots_layout.addStretch()
+        self.save_overlay.show()
+        self._raise_overlays()
+
+    def _make_slot_row(self, i: int, saving: bool) -> QFrame:
+        slot = self.saves.slots[i]
+        row = QFrame()
+        row.setObjectName("slotRow")
+        rl = QHBoxLayout(row)
+        if slot:
+            info = QLabel(f'<b>スロット {i+1}</b>　{slot.saved_at}<br>'
+                         f'<span style="color:#bbb">{slot.label}</span>')
+        else:
+            info = QLabel(f'<b>スロット {i+1}</b>　<span style="color:#888">（空き）</span>')
+        info.setWordWrap(True)
+        rl.addWidget(info, 1)
+
+        if saving:
+            b = QPushButton("ここに保存")
+            b.clicked.connect(lambda checked=False, idx=i: self._do_save(idx))
+            rl.addWidget(b)
+        else:
+            b = QPushButton("ロード")
+            b.setEnabled(slot is not None)
+            b.clicked.connect(lambda checked=False, idx=i: self._do_load(idx))
+            rl.addWidget(b)
+        if slot:
+            d = QPushButton("削除")
+            d.clicked.connect(lambda checked=False, idx=i: self._do_clear(idx))
+            rl.addWidget(d)
+        return row
+
+    def _slot_label(self) -> str:
+        scene = self.project.scene(self.runtime.state.scene_id)
+        sname = scene["name"] if scene else ""
+        return f'{self.project.title}／{sname}'
+
+    def _do_save(self, idx: int):
+        self.saves.save(idx, self.runtime.state, self._slot_label())
+        self._open_save(True)  # リフレッシュ
+
+    def _do_load(self, idx: int):
+        state = self.saves.load(idx)
+        if state is None:
+            return
+        self.save_overlay.hide()
+        self._hide_all_overlays()
+        ev = self.runtime.load_state(state)
+        self._present(ev)
+
+    def _do_clear(self, idx: int):
+        self.saves.clear(idx)
+        self._open_save(self._save_mode)
+
+    # ------------------------------------------------------------------
+    # レイアウト
+    # ------------------------------------------------------------------
+    def resizeEvent(self, event):
+        self._layout_children()
+        super().resizeEvent(event)
+
+    def _layout_children(self):
+        w, h = self.width(), self.height()
+        mh = self._msg_height()
+        # メッセージウィンドウ：下部
+        self.msg_frame.setGeometry(int(w * 0.04), h - mh - 12,
+                                   int(w * 0.92), mh)
+        # ゲージパネル：左上
+        self.gauge_panel.adjustSize()
+        self.gauge_panel.move(12, 12)
+        # アイテムボタン：右上
+        self.items_btn.move(w - 56, 12)
+        # メニュー：右上（アイテムボタンの下）
+        self.menu_frame.adjustSize()
+        self.menu_frame.move(w - self.menu_frame.width() - 12, 64)
+        # 選択肢：中央
+        self.choice_frame.setGeometry(int(w * 0.2), int(h * 0.22),
+                                      int(w * 0.6), int(h * 0.5))
+        # オーバーレイ：全面
+        for ov in (self.name_overlay, self.items_overlay,
+                   self.save_overlay, self.ending_overlay):
+            ov.setGeometry(0, 0, w, h)
+
+    def _raise_overlays(self):
+        for ov in (self.name_overlay, self.items_overlay,
+                   self.save_overlay, self.ending_overlay):
+            if ov.isVisible():
+                ov.raise_()
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key_Space, Qt.Key_Return, Qt.Key_Enter):
+            if not any(ov.isVisible() for ov in
+                       (self.name_overlay, self.items_overlay,
+                        self.save_overlay, self.ending_overlay)):
+                self._on_advance_click()
+        super().keyPressEvent(event)
+
+
+# ---------------------------------------------------------------------------
+# ゲージバー
+# ---------------------------------------------------------------------------
+class _GaugeBar(QWidget):
+    def __init__(self, gauge: dict, value, parent=None):
+        super().__init__(parent)
+        self.gauge = gauge
+        self.value = float(value)
+        self.setFixedSize(180, 30)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        g = self.gauge
+        lo = float(g.get("min", 0))
+        hi = float(g.get("max", 100))
+        ratio = 0 if hi <= lo else max(0.0, min(1.0, (self.value - lo) / (hi - lo)))
+
+        bar_rect = QRect(0, 16, self.width(), 12)
+        p.setBrush(QColor(0, 0, 0, 120))
+        p.setPen(Qt.NoPen)
+        p.drawRoundedRect(bar_rect, 6, 6)
+        fill = QRect(0, 16, int(self.width() * ratio), 12)
+        p.setBrush(QColor(g.get("color", "#4cc2ff")))
+        p.drawRoundedRect(fill, 6, 6)
+
+        p.setPen(QColor("#ffffff"))
+        font = QFont()
+        font.setPointSize(9)
+        font.setBold(True)
+        p.setFont(font)
+        val = int(self.value) if self.value == int(self.value) else round(self.value, 1)
+        p.drawText(QRect(0, 0, self.width(), 14), Qt.AlignLeft,
+                   f'{g.get("name","")}: {val}')
+        p.end()
+
+
+# ---------------------------------------------------------------------------
+# スタイル
+# ---------------------------------------------------------------------------
+PLAYER_QSS = """
+PlayerWidget { background:#000; }
+#msgWin {
+    background: rgba(15, 18, 30, 0.86);
+    border: 2px solid rgba(120,150,220,0.5);
+    border-radius: 14px;
+}
+#nameLabel { font-size: 18px; font-weight: bold; }
+#msgText { font-size: 19px; color: #f2f4ff; line-height: 150%; }
+#gaugePanel {
+    background: rgba(10,12,20,0.62);
+    border-radius: 10px;
+}
+#itemsBtn {
+    font-size: 20px;
+    background: rgba(20,24,40,0.8);
+    border: 1px solid rgba(150,170,230,0.5);
+    border-radius: 22px;
+}
+#itemsBtn:hover { background: rgba(40,48,80,0.9); }
+#menuBtn {
+    background: rgba(20,24,40,0.8);
+    border: 1px solid rgba(150,170,230,0.4);
+    border-radius: 8px;
+    padding: 6px 10px;
+}
+#menuBtn:hover { background: rgba(50,60,100,0.9); }
+#choiceBtn {
+    background: rgba(30,36,60,0.92);
+    border: 2px solid rgba(150,170,230,0.6);
+    border-radius: 10px;
+    padding: 14px 20px;
+    font-size: 17px;
+    margin: 6px 0;
+    color: #eef;
+}
+#choiceBtn:hover { background: rgba(70,90,160,0.95); border-color:#9fe3ff; }
+#overlay { background: rgba(0,0,0,0.72); }
+#overlayBox {
+    background: #1a1e2e;
+    border: 2px solid rgba(150,170,230,0.5);
+    border-radius: 16px;
+}
+#overlayTitle { font-size: 20px; font-weight: bold; color:#dfe6ff; }
+#endingBadge { font-size: 22px; font-weight: bold; letter-spacing: 3px; }
+#endingName { font-size: 28px; font-weight: bold; color:#fff; }
+#slotRow, #itemRow {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(150,170,230,0.25);
+    border-radius: 10px;
+    margin: 3px 0;
+}
+QPushButton {
+    background:#2a3050; color:#e8ecff; border:1px solid #44507a;
+    border-radius:7px; padding:7px 12px;
+}
+QPushButton:hover { background:#3a4470; }
+QPushButton#primary { background:#3a6df0; border-color:#5a8dff; font-weight:bold; }
+QPushButton#primary:hover { background:#4a7dff; }
+QLineEdit {
+    background:#0e1120; border:1px solid #44507a; border-radius:6px;
+    padding:8px; color:#fff; font-size:16px;
+}
+"""
