@@ -427,6 +427,73 @@ class BgmEditor(ListEditor):
 
 
 # ===========================================================================
+# SE（効果音）エディタ
+# ===========================================================================
+class SeEditor(ListEditor):
+    title = "SE"
+
+    def entries(self):
+        return self.project.se
+
+    def default_entry(self):
+        return {"id": uid("se"), "name": f"SE{len(self.entries())+1}", "path": ""}
+
+    def label_for(self, e):
+        return f'🔊 {e["name"]}'
+
+    def build_form(self, e):
+        f = QFormLayout()
+        name = QLineEdit(e["name"])
+        name.textChanged.connect(lambda t: (e.__setitem__("name", t), self.touch()))
+        path = FilePicker(e.get("path", ""),
+                          lambda t: (e.__setitem__("path", t), self.touch()),
+                          "音声 (*.mp3 *.wav *.ogg *.m4a *.flac)")
+        f.addRow("効果音名:", name)
+        f.addRow("音声ファイル:", path)
+        hint = QLabel("※ SE は一度だけ再生されます（BGMと別系統・ループしません）。")
+        hint.setStyleSheet("color:#888;")
+        f.addRow("", hint)
+        host = QWidget(); host.setLayout(f)
+        self.form_host.addWidget(host)
+
+
+# ===========================================================================
+# CG（イベント絵）エディタ
+# ===========================================================================
+class CgEditor(ListEditor):
+    title = "CG"
+
+    def entries(self):
+        return self.project.cg
+
+    def default_entry(self):
+        return {"id": uid("cg"), "name": f"CG{len(self.entries())+1}",
+                "image": "", "color": "#1a1a2a"}
+
+    def label_for(self, e):
+        return f'🌅 {e["name"]}'
+
+    def build_form(self, e):
+        f = QFormLayout()
+        name = QLineEdit(e["name"])
+        name.textChanged.connect(lambda t: (e.__setitem__("name", t), self.touch()))
+        img = FilePicker(e.get("image", ""),
+                         lambda t: (e.__setitem__("image", t), self.touch()),
+                         "画像 (*.png *.jpg *.jpeg *.bmp *.webp)")
+        color = ColorButton(e.get("color", "#1a1a2a"),
+                            lambda c: (e.__setitem__("color", c), self.touch()))
+        f.addRow("CG名:", name)
+        f.addRow("画像:", img)
+        f.addRow("背景色(画像が無い時):", color)
+        hint = QLabel("※ CGは画面全体に表示されます（背景・立ち絵の上）。\n"
+                      "　CGコマンドの「消す」で非表示にできます。")
+        hint.setStyleSheet("color:#888;")
+        f.addRow("", hint)
+        host = QWidget(); host.setLayout(f)
+        self.form_host.addWidget(host)
+
+
+# ===========================================================================
 # エンディングエディタ
 # ===========================================================================
 class EndingEditor(ListEditor):

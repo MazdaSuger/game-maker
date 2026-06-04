@@ -62,6 +62,9 @@ class PlayerWidget(QWidget):
         self._audio = None
         self._player = None
         self._cur_bgm = None
+        # SE（効果音）: 同時発音できるよう小さなプールを用意
+        self._se_pool = []
+        self._se_idx = 0
         if _HAS_AUDIO:
             try:
                 self._audio = QAudioOutput()
@@ -69,6 +72,14 @@ class PlayerWidget(QWidget):
                 self._player.setAudioOutput(self._audio)
             except Exception:
                 self._player = None
+            try:
+                for _ in range(3):
+                    out = QAudioOutput()
+                    pl = QMediaPlayer()
+                    pl.setAudioOutput(out)
+                    self._se_pool.append((pl, out))
+            except Exception:
+                self._se_pool = []
 
         self._build_ui()
 
@@ -301,6 +312,15 @@ class PlayerWidget(QWidget):
         self.title_overlay.raise_()
         self.update()
 
+    def start_at(self, scene_id: str):
+        """タイトルを飛ばして指定シーンから開始（選択シーンのテスト用）。"""
+        self._title_mode = False
+        self._hide_all_overlays()
+        self.choice_frame.hide()
+        self._set_game_chrome(True)
+        self._present(self.runtime.start(start_scene=scene_id))
+        self.setFocus()
+
     def _begin_new(self):
         self._title_mode = False
         self.title_overlay.hide()
@@ -343,6 +363,8 @@ class PlayerWidget(QWidget):
     def _present(self, ev: dict):
         self._current_event = ev
         self._update_stage()
+        for se_id in ev.get("sfx", []):   # 効果音を再生
+            self._play_se(se_id)
         kind = ev.get("kind")
 
         self.choice_frame.hide()
@@ -543,15 +565,40 @@ class PlayerWidget(QWidget):
         if not drew_bg:
             p.fillRect(rect, QColor("#101018"))
 
-        # 立ち絵（暗転中は描かない）
-        if not st.blackout and st.char_id:
+        # 立ち絵（暗転中・CG表示中は描かない）
+        if not st.blackout and not st.cg_id and st.char_id:
             self._paint_character(p, rect, st)
+
+        # CG（画面全体・背景と立ち絵の上）
+        if st.cg_id and not st.blackout:
+            self._paint_cg(p, rect, st.cg_id)
 
         # 暗転
         if st.blackout:
             p.fillRect(rect, QColor(0, 0, 0))
 
         p.end()
+
+    def _paint_cg(self, p: QPainter, rect: QRect, cg_id: str):
+        cg = self.project.cg_item(cg_id)
+        if not cg:
+            return
+        # 下地（画像が無い/レターボックス部分）
+        p.fillRect(rect, QColor(cg.get("color", "#000000")))
+        pix = self._pixmap(cg.get("image", ""))
+        if pix is not None:
+            # 全体が見えるように contain（アスペクト維持）で中央配置
+            scaled = pix.scaled(rect.size(), Qt.KeepAspectRatio,
+                                Qt.SmoothTransformation)
+            x = (rect.width() - scaled.width()) // 2
+            y = (rect.height() - scaled.height()) // 2
+            p.drawPixmap(x, y, scaled)
+        else:
+            # 画像未設定：CG名をプレースホルダ表示
+            p.setPen(QColor("#ffffff"))
+            font = QFont(); font.setPointSize(20); font.setBold(True)
+            p.setFont(font)
+            p.drawText(rect, Qt.AlignCenter, f'［CG］{cg.get("name", "")}')
 
     def _paint_character(self, p: QPainter, rect: QRect, st: GameState):
         ch = self.project.character(st.char_id)
@@ -632,6 +679,23 @@ class PlayerWidget(QWidget):
             except Exception:
                 pass
         self._cur_bgm = None
+
+    def _play_se(self, se_id: str):
+        """効果音を一度だけ再生する（プールを巡回）。"""
+        if not self._se_pool:
+            return
+        track = self.project.se_track(se_id)
+        if not track or not track.get("path") or not os.path.exists(track["path"]):
+            return
+        pl, out = self._se_pool[self._se_idx]
+        self._se_idx = (self._se_idx + 1) % len(self._se_pool)
+        try:
+            pl.setSource(QUrl.fromLocalFile(track["path"]))
+            pl.setLoops(1)
+            out.setVolume(0.9)
+            pl.play()
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # アイテム表示

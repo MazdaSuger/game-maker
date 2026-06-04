@@ -118,7 +118,7 @@
     return {
       variables: {}, gauges: {}, items: [],
       scene_id: "", cmd_index: 0,
-      bg_id: "", blackout: false, char_id: "", expr_id: "",
+      bg_id: "", blackout: false, cg_id: "", char_id: "", expr_id: "",
       bgm_id: "", discovered_endings: [],
     };
   }
@@ -136,7 +136,7 @@
   Runtime.prototype.ending = function (id) { return this._endings[id] || null; };
   Runtime.prototype.scene = function (id) { return this._scenes[id] || null; };
 
-  Runtime.prototype.start = function () {
+  Runtime.prototype.start = function (startScene) {
     const st = newState();
     (this.project.variables || []).forEach((v) => {
       st.variables[v.name] = initialVarValue(v);
@@ -144,7 +144,7 @@
     (this.project.gauges || []).forEach((g) => {
       st.gauges[g.id] = toNumber(g.initial || 0);
     });
-    st.scene_id = (this.project.meta && this.project.meta.startScene) || "";
+    st.scene_id = startScene || (this.project.meta && this.project.meta.startScene) || "";
     if (!st.scene_id && this.project.scenes.length) {
       st.scene_id = this.project.scenes[0].id;
     }
@@ -196,22 +196,31 @@
 
   Runtime.prototype._run = function () {
     let guard = 0;
+    this._sfx = [];
     while (true) {
-      if (++guard > 100000) return { kind: "end", reason: "loop-guard" };
+      if (++guard > 100000) return this._withSfx({ kind: "end", reason: "loop-guard" });
       const scene = this.scene(this.state.scene_id);
-      if (!scene) return { kind: "end", reason: "no-scene" };
+      if (!scene) return this._withSfx({ kind: "end", reason: "no-scene" });
       const cmds = scene.commands || [];
       if (this.state.cmd_index >= cmds.length)
-        return { kind: "end", reason: "scene-finished" };
+        return this._withSfx({ kind: "end", reason: "scene-finished" });
       const cmd = cmds[this.state.cmd_index];
       this._jumped = false;
       const event = this._exec(cmd);
       if (event !== null) {
         this._pending = event;
-        return event;
+        return this._withSfx(event);
       }
       if (!this._jumped) this.state.cmd_index += 1;
     }
+  };
+
+  Runtime.prototype._withSfx = function (event) {
+    if (this._sfx && this._sfx.length) {
+      event.sfx = this._sfx.slice();
+      this._sfx = [];
+    }
+    return event;
   };
 
   Runtime.prototype._interp = function (text) {
@@ -242,10 +251,23 @@
       };
     }
     if (t === "narrate") return { kind: "narrate", text: this._interp(cmd.text) };
+    if (t === "charExit") {
+      const target = cmd.charId || "";
+      if (!target || st.char_id === target) { st.char_id = ""; st.expr_id = ""; }
+      return null;
+    }
     if (t === "bg") { st.bg_id = cmd.bgId || ""; return null; }
     if (t === "blackout") { st.blackout = (cmd.mode || "on") === "on"; return null; }
     if (t === "bgm") {
       st.bgm_id = (cmd.action === "stop") ? "" : (cmd.bgmId || "");
+      return null;
+    }
+    if (t === "se") {
+      if (cmd.seId) { this._sfx = this._sfx || []; this._sfx.push(cmd.seId); }
+      return null;
+    }
+    if (t === "cg") {
+      st.cg_id = (cmd.action === "hide") ? "" : (cmd.cgId || "");
       return null;
     }
     if (t === "nameInput") {

@@ -19,6 +19,13 @@ html, body {
   position: absolute; inset: 0;
   background-size: cover; background-position: center; transition: opacity .25s;
 }
+#cg {
+  position: absolute; inset: 0; display: none;
+  background-size: contain; background-position: center;
+  background-repeat: no-repeat; background-color: #000;
+  align-items: center; justify-content: center;
+  color: #fff; font-size: 26px; font-weight: bold;
+}
 #blackout {
   position: absolute; inset: 0; background: #000; opacity: 0;
   transition: opacity .35s; pointer-events: none;

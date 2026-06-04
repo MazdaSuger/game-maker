@@ -31,9 +31,12 @@ def uid(prefix: str = "id") -> str:
 COMMAND_TYPES = [
     ("say",       "セリフ",       "💬"),
     ("narrate",   "地の文",       "📝"),
+    ("charExit",  "キャラ退場",   "🚪"),
     ("bg",        "背景変更",     "🖼"),
+    ("cg",        "CG表示",       "🌅"),
     ("blackout",  "暗転",         "🌑"),
     ("bgm",       "BGM",          "🎵"),
+    ("se",        "効果音(SE)",   "🔊"),
     ("nameInput", "名前入力",     "🔤"),
     ("setVar",    "変数操作",     "🔢"),
     ("gauge",     "ゲージ操作",   "📊"),
@@ -130,12 +133,18 @@ def new_command(ctype: str) -> dict:
         base.update(charId="", exprId="", text="")
     elif ctype == "narrate":
         base.update(text="")
+    elif ctype == "charExit":
+        base.update(charId="")  # 空=表示中のキャラを退場
     elif ctype == "bg":
         base.update(bgId="")
     elif ctype == "blackout":
         base.update(mode="on")  # on=暗転 / off=解除
     elif ctype == "bgm":
         base.update(action="play", bgmId="", loop=True)
+    elif ctype == "se":
+        base.update(seId="")
+    elif ctype == "cg":
+        base.update(cgId="", action="show")  # show / hide
     elif ctype == "nameInput":
         base.update(varName="", prompt="名前を入力してください")
     elif ctype == "setVar":
@@ -206,6 +215,14 @@ class Project:
         return self.data["bgm"]
 
     @property
+    def se(self) -> list:
+        return self.data.setdefault("se", [])
+
+    @property
+    def cg(self) -> list:
+        return self.data.setdefault("cg", [])
+
+    @property
     def endings(self) -> list:
         return self.data["endings"]
 
@@ -241,6 +258,12 @@ class Project:
 
     def bgm_track(self, bid: str) -> Optional[dict]:
         return self._find(self.bgm, bid)
+
+    def se_track(self, sid: str) -> Optional[dict]:
+        return self._find(self.se, sid)
+
+    def cg_item(self, cid: str) -> Optional[dict]:
+        return self._find(self.cg, cid)
 
     def ending(self, eid: str) -> Optional[dict]:
         return self._find(self.endings, eid)
@@ -287,6 +310,8 @@ def default_project() -> dict:
     bgm_main = uid("bgm")
     g_aff = uid("gauge")
     it_key = uid("item")
+    se_select = uid("se")
+    cg_event = uid("cg")
     end_true, end_normal, end_secret = uid("end"), uid("end"), uid("end")
     s_start, s_a, s_b, s_end = uid("scene"), uid("scene"), uid("scene"), uid("scene")
     s_true, s_normal, s_secret = uid("scene"), uid("scene"), uid("scene")
@@ -328,6 +353,12 @@ def default_project() -> dict:
         ],
         "bgm": [
             {"id": bgm_main, "name": "メインテーマ", "path": "", "loop": True},
+        ],
+        "se": [
+            {"id": se_select, "name": "決定音", "path": ""},
+        ],
+        "cg": [
+            {"id": cg_event, "name": "回想シーン", "image": "", "color": "#2a1a3a"},
         ],
         "endings": [
             {"id": end_true, "name": "トゥルーエンド", "hidden": False,
@@ -395,8 +426,11 @@ def default_project() -> dict:
                 {"id": uid("cmd"), "type": "ending", "endingId": end_normal},
             ]},
             {"id": s_secret, "name": "[END] 裏エンド", "commands": [
+                {"id": uid("cmd"), "type": "se", "seId": se_select},
+                {"id": uid("cmd"), "type": "cg", "cgId": cg_event, "action": "show"},
                 {"id": uid("cmd"), "type": "say", "charId": hero, "exprId": e_normal,
                  "text": "……実はね、ずっと言えなかったことがあるの。"},
+                {"id": uid("cmd"), "type": "cg", "cgId": cg_event, "action": "hide"},
                 {"id": uid("cmd"), "type": "setVar", "varName": "flag_secret",
                  "op": "set", "value": "true"},
                 {"id": uid("cmd"), "type": "ending", "endingId": end_secret},
@@ -421,6 +455,9 @@ def describe_command(cmd: dict, project: "Project") -> str:
         return f"{name}「{_short(cmd.get('text',''))}」"
     if t == "narrate":
         return f"{_short(cmd.get('text',''))}"
+    if t == "charExit":
+        ch = project.character(cmd.get("charId", ""))
+        return f"キャラ退場 → {ch['name'] if ch else '（表示中のキャラ）'}"
     if t == "bg":
         bg = project.background(cmd.get("bgId", ""))
         return f"背景 → {bg['name'] if bg else '（未設定）'}"
@@ -432,6 +469,14 @@ def describe_command(cmd: dict, project: "Project") -> str:
         bgm = project.bgm_track(cmd.get("bgmId", ""))
         loop = "（ループ）" if cmd.get("loop", True) else ""
         return f"BGM再生 → {bgm['name'] if bgm else '（未設定）'}{loop}"
+    if t == "se":
+        se = project.se_track(cmd.get("seId", ""))
+        return f"効果音 → {se['name'] if se else '（未設定）'}"
+    if t == "cg":
+        cg = project.cg_item(cmd.get("cgId", ""))
+        if cmd.get("action") == "hide":
+            return "CGを消す"
+        return f"CG表示 → {cg['name'] if cg else '（未設定）'}"
     if t == "nameInput":
         return f"名前入力 → 変数「{cmd.get('varName','?')}」"
     if t == "setVar":

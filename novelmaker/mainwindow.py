@@ -17,7 +17,7 @@ from .model import Project
 from .scene_editor import SceneEditor
 from .editors import (
     CharacterEditor, ItemEditor, VariableEditor, GaugeEditor,
-    BackgroundEditor, BgmEditor, EndingEditor,
+    BackgroundEditor, BgmEditor, EndingEditor, SeEditor, CgEditor,
 )
 from .layout_editor import LayoutEditor
 from .flowchart import FlowchartTab
@@ -172,7 +172,9 @@ class MainWindow(QMainWindow):
         self.variable_editor = VariableEditor(self.project)
         self.gauge_editor = GaugeEditor(self.project)
         self.background_editor = BackgroundEditor(self.project)
+        self.cg_editor = CgEditor(self.project)
         self.bgm_editor = BgmEditor(self.project)
+        self.se_editor = SeEditor(self.project)
         self.ending_editor = EndingEditor(self.project)
         self.layout_editor = LayoutEditor(self.project)
         self.flowchart_tab = FlowchartTab(self.project)
@@ -186,7 +188,9 @@ class MainWindow(QMainWindow):
             ("🔢 変数", self.variable_editor),
             ("📊 ゲージ", self.gauge_editor),
             ("🖼 背景", self.background_editor),
+            ("🌅 CG", self.cg_editor),
             ("🎵 BGM", self.bgm_editor),
+            ("🔊 SE", self.se_editor),
             ("🏁 エンディング", self.ending_editor),
             ("🎨 レイアウト", self.layout_editor),
             ("⚙ 設定", self.settings_editor),
@@ -196,6 +200,7 @@ class MainWindow(QMainWindow):
 
         # シーン変更時に設定タブの開始シーン候補を更新
         self.scene_editor.changed.connect(self._on_project_changed)
+        self.scene_editor.testFromScene.connect(self.play_from)
         self.layout_editor.changed.connect(self._on_project_changed)
         self.flowchart_tab.sceneOpenRequested.connect(self._open_scene_from_flowchart)
         self.tabs.currentChanged.connect(self._on_tab_changed)
@@ -272,6 +277,13 @@ class MainWindow(QMainWindow):
     # テストプレイ
     # ------------------------------------------------------------------
     def play(self):
+        self._launch_player(None)
+
+    def play_from(self, scene_id: str):
+        """選択したシーンからテストプレイを開始する（タイトルを飛ばす）。"""
+        self._launch_player(scene_id)
+
+    def _launch_player(self, start_scene):
         if not self.project.scenes:
             QMessageBox.information(self, "シーンがありません",
                                     "先にシーンを1つ以上作成してください。")
@@ -281,7 +293,10 @@ class MainWindow(QMainWindow):
         self.player.exited.connect(self._exit_player)
         self.stack.addWidget(self.player)
         self.stack.setCurrentWidget(self.player)
-        self.player.start()
+        if start_scene:
+            self.player.start_at(start_scene)
+        else:
+            self.player.start()
 
     def export_html(self):
         """現在のプロジェクトをブラウザで遊べるWebゲームに書き出す。"""

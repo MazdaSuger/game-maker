@@ -16,11 +16,12 @@
   // 索引
   const byId = (list) => Object.fromEntries((list || []).map((e) => [e.id, e]));
   const chars = byId(DATA.characters), bgs = byId(DATA.backgrounds),
-        items = byId(DATA.items), bgms = byId(DATA.bgm);
+        items = byId(DATA.items), bgms = byId(DATA.bgm),
+        ses = byId(DATA.se || []), cgs = byId(DATA.cg || []);
 
   // DOM
   const $ = (id) => document.getElementById(id);
-  const elBg = $("bg"), elChar = $("char"), elBlackout = $("blackout"),
+  const elBg = $("bg"), elChar = $("char"), elCg = $("cg"), elBlackout = $("blackout"),
         elGauges = $("gauges"), elMsgWin = $("msgwin"), elName = $("msg-name"),
         elText = $("msg-text"), elNext = $("msg-next"), elChoices = $("choices");
 
@@ -35,6 +36,7 @@
   function present(ev) {
     current = ev;
     updateStage();
+    (ev.sfx || []).forEach(playSe);   // 効果音
     elChoices.style.display = "none";
     hideOverlay("ov-name"); // 入力以外では閉じる前提
 
@@ -168,11 +170,38 @@
       }
     }
 
+    // CG（背景・立ち絵の上、全画面）
+    const cg = cgs[st.cg_id];
+    if (st.cg_id && cg) {
+      if (cg.image) {
+        elCg.style.backgroundImage = `url("${cg.image}")`;
+        elCg.textContent = "";
+      } else {
+        elCg.style.backgroundImage = "none";
+        elCg.style.backgroundColor = cg.color || "#000";
+        elCg.textContent = "［CG］" + (cg.name || "");
+      }
+      elCg.style.display = "flex";
+    } else {
+      elCg.style.display = "none";
+    }
+
     // 暗転
     elBlackout.classList.toggle("on", !!st.blackout);
 
     updateGauges();
     updateBgm();
+  }
+
+  // ---------------- SE（効果音） ----------------
+  function playSe(seId) {
+    const track = ses[seId];
+    if (!track || !track.path) return;
+    try {
+      const a = new Audio(track.path);
+      a.volume = 0.9;
+      const p = a.play(); if (p && p.catch) p.catch(() => {});
+    } catch (e) {}
   }
 
   function updateGauges() {

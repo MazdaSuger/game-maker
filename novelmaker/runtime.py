@@ -135,6 +135,7 @@ class GameState:
         # 表示状態
         self.bg_id: str = ""
         self.blackout: bool = False
+        self.cg_id: str = ""                  # 表示中のCG（""=なし）
         self.char_id: str = ""                # 現在表示中のキャラ
         self.expr_id: str = ""
         self.bgm_id: str = ""                 # 再生中BGM
@@ -150,6 +151,7 @@ class GameState:
             "cmd_index": self.cmd_index,
             "bg_id": self.bg_id,
             "blackout": self.blackout,
+            "cg_id": self.cg_id,
             "char_id": self.char_id,
             "expr_id": self.expr_id,
             "bgm_id": self.bgm_id,
@@ -166,6 +168,7 @@ class GameState:
         s.cmd_index = d.get("cmd_index", 0)
         s.bg_id = d.get("bg_id", "")
         s.blackout = d.get("blackout", False)
+        s.cg_id = d.get("cg_id", "")
         s.char_id = d.get("char_id", "")
         s.expr_id = d.get("expr_id", "")
         s.bgm_id = d.get("bgm_id", "")
@@ -194,20 +197,26 @@ class Runtime:
         self.project = project
         self.state = GameState()
         self._pending: Optional[dict] = None  # 入力待ちイベント
+        self._sfx: list[str] = []             # この区間で再生するSE
 
     # --- 開始 / ロード ------------------------------------------------
-    def start(self) -> dict:
-        """初期状態を構築してゲームを開始する。"""
+    def start(self, start_scene: Optional[str] = None) -> dict:
+        """初期状態を構築してゲームを開始する。
+
+        ``start_scene`` を指定すると、そのシーンから開始する
+        （選択シーンからのテストプレイに使用）。
+        """
         st = GameState()
         for v in self.project.variables:
             st.variables[v["name"]] = _initial_var_value(v)
         for g in self.project.gauges:
             st.gauges[g["id"]] = _to_number(g.get("initial", 0))
-        st.scene_id = self.project.meta.get("startScene", "")
+        st.scene_id = start_scene or self.project.meta.get("startScene", "")
         if not st.scene_id and self.project.scenes:
             st.scene_id = self.project.scenes[0]["id"]
         st.cmd_index = 0
         self.state = st
+        self._pending = None
         return self.advance()
 
     def load_state(self, state: GameState) -> dict:
@@ -254,24 +263,25 @@ class Runtime:
     # --- 内部実行ループ ----------------------------------------------
     def _run(self) -> dict:
         guard = 0  # 無限ループ保護
+        self._sfx = []  # この区間で鳴らすSEを集める
         while True:
             guard += 1
             if guard > 100000:
-                return {"kind": "end", "reason": "loop-guard"}
+                return self._with_sfx({"kind": "end", "reason": "loop-guard"})
 
             scene = self.project.scene(self.state.scene_id)
             if scene is None:
-                return {"kind": "end", "reason": "no-scene"}
+                return self._with_sfx({"kind": "end", "reason": "no-scene"})
             cmds = scene.get("commands", [])
             if self.state.cmd_index >= len(cmds):
-                return {"kind": "end", "reason": "scene-finished"}
+                return self._with_sfx({"kind": "end", "reason": "scene-finished"})
 
             cmd = cmds[self.state.cmd_index]
             event = self._exec(cmd)
             if event is not None:
                 # ブロッキングイベント：返して停止
                 self._pending = event
-                return event
+                return self._with_sfx(event)
             # 非ブロッキング：ジャンプ系で cmd_index を動かさなかった場合のみ進める
             # _exec が False を返した（=ジャンプ済み）場合は進めない
             if cmd.get("_jumped"):
@@ -304,6 +314,14 @@ class Runtime:
         if t == "narrate":
             return {"kind": "narrate", "text": self._interp(cmd.get("text", ""))}
 
+        if t == "charExit":
+            target = cmd.get("charId", "")
+            # 対象未指定、または表示中のキャラが対象なら立ち絵を消す
+            if not target or self.state.char_id == target:
+                self.state.char_id = ""
+                self.state.expr_id = ""
+            return None
+
         if t == "bg":
             self.state.bg_id = cmd.get("bgId", "")
             return None
@@ -317,6 +335,19 @@ class Runtime:
                 self.state.bgm_id = ""
             else:
                 self.state.bgm_id = cmd.get("bgmId", "")
+            return None
+
+        if t == "se":
+            sid = cmd.get("seId", "")
+            if sid:
+                self._sfx.append(sid)
+            return None
+
+        if t == "cg":
+            if cmd.get("action") == "hide":
+                self.state.cg_id = ""
+            else:
+                self.state.cg_id = cmd.get("cgId", "")
             return None
 
         if t == "nameInput":
@@ -375,6 +406,13 @@ class Runtime:
 
         # 未知のコマンドは無視
         return None
+
+    def _with_sfx(self, event: dict) -> dict:
+        """イベントに、この区間で再生するSE一覧を添える。"""
+        if self._sfx:
+            event["sfx"] = list(self._sfx)
+            self._sfx = []
+        return event
 
     # --- ヘルパー -----------------------------------------------------
     def _goto_scene(self, sid: str):

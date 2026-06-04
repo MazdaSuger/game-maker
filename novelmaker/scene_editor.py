@@ -22,7 +22,8 @@ from .command_dialog import CommandDialog
 
 
 class SceneEditor(QWidget):
-    changed = Signal()  # プロジェクトが変更された
+    changed = Signal()           # プロジェクトが変更された
+    testFromScene = Signal(str)  # このシーンからテストプレイ（scene_id）
 
     def __init__(self, project: Project):
         super().__init__()
@@ -51,6 +52,11 @@ class SceneEditor(QWidget):
         self.start_btn = QPushButton("⭐ 開始シーンに設定")
         self.start_btn.clicked.connect(self._set_start)
         left.addWidget(self.start_btn)
+
+        self.test_btn = QPushButton("▶ このシーンからテスト")
+        self.test_btn.setProperty("primary", True)
+        self.test_btn.clicked.connect(self._test_from_here)
+        left.addWidget(self.test_btn)
 
         lw = QWidget()
         lw.setLayout(left)
@@ -195,6 +201,10 @@ class SceneEditor(QWidget):
         self.project.meta["startScene"] = self.current_scene["id"]
         self._refresh_scene_labels()
         self._emit_changed()
+
+    def _test_from_here(self):
+        if self.current_scene:
+            self.testFromScene.emit(self.current_scene["id"])
 
     # ------------------------------------------------------------------
     # コマンド操作

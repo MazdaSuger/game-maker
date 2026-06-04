@@ -120,6 +120,18 @@ class CommandDialog(QDialog):
                 self.expr_cb.addItem(e["name"], e["id"])
             set_combo_value(self.expr_cb, self.cmd.get("exprId", ""))
 
+    def _form_charExit(self):
+        f = QFormLayout()
+        self.char_cb = _combo([(c["id"], c["name"]) for c in self.project.characters],
+                              self.cmd.get("charId", ""),
+                              none_label="（表示中のキャラを退場）")
+        f.addRow("退場するキャラ:", self.char_cb)
+        hint = QLabel("※ 指定したキャラが表示中なら立ち絵を消します。\n"
+                      "　未指定の場合は、今表示している立ち絵を消します。")
+        hint.setStyleSheet("color:#888;")
+        f.addRow("", hint)
+        self._add_form(f)
+
     def _form_narrate(self):
         f = QFormLayout()
         self.text_edit = QPlainTextEdit(self.cmd.get("text", ""))
@@ -154,6 +166,23 @@ class CommandDialog(QDialog):
         f.addRow("動作:", self.action_cb)
         f.addRow("曲:", self.bgm_cb)
         f.addRow("", self.loop_cb)
+        self._add_form(f)
+
+    def _form_se(self):
+        f = QFormLayout()
+        self.se_cb = _combo([(s["id"], s["name"]) for s in self.project.se],
+                            self.cmd.get("seId", ""), none_label="（効果音を選択）")
+        f.addRow("効果音:", self.se_cb)
+        self._add_form(f)
+
+    def _form_cg(self):
+        f = QFormLayout()
+        self.action_cb = _combo([("show", "表示する"), ("hide", "消す")],
+                                self.cmd.get("action", "show"))
+        self.cg_cb = _combo([(c["id"], c["name"]) for c in self.project.cg],
+                            self.cmd.get("cgId", ""), none_label="（CGを選択）")
+        f.addRow("動作:", self.action_cb)
+        f.addRow("CG:", self.cg_cb)
         self._add_form(f)
 
     def _form_nameInput(self):
@@ -307,6 +336,8 @@ class CommandDialog(QDialog):
             self.cmd["text"] = self.text_edit.toPlainText()
         elif t == "narrate":
             self.cmd["text"] = self.text_edit.toPlainText()
+        elif t == "charExit":
+            self.cmd["charId"] = self.char_cb.currentData() or ""
         elif t == "bg":
             self.cmd["bgId"] = self.bg_cb.currentData() or ""
         elif t == "blackout":
@@ -315,6 +346,11 @@ class CommandDialog(QDialog):
             self.cmd["action"] = self.action_cb.currentData()
             self.cmd["bgmId"] = self.bgm_cb.currentData() or ""
             self.cmd["loop"] = self.loop_cb.isChecked()
+        elif t == "se":
+            self.cmd["seId"] = self.se_cb.currentData() or ""
+        elif t == "cg":
+            self.cmd["action"] = self.action_cb.currentData()
+            self.cmd["cgId"] = self.cg_cb.currentData() or ""
         elif t == "nameInput":
             self.cmd["varName"] = self.var_cb.currentData() or ""
             self.cmd["prompt"] = self.prompt_edit.text()
