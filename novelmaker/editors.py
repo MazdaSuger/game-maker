@@ -472,12 +472,13 @@ class CharacterEditor(ListEditor):
 
     def default_entry(self):
         return {"id": uid("char"), "name": f"キャラ{len(self.entries())+1}",
-                "color": "#ffffff",
+                "color": "#ffffff", "isProtagonist": False, "showSprite": True,
                 "expressions": [{"id": uid("expr"), "name": "通常", "image": ""}]}
 
     def label_for(self, e):
         n = len(e.get("expressions", []))
-        return f'{e["name"]}  （表情{n}種）'
+        mark = "👤 " if e.get("isProtagonist") else ""
+        return f'{mark}{e["name"]}  （表情{n}種）'
 
     def build_form(self, e):
         f = QFormLayout()
@@ -487,6 +488,27 @@ class CharacterEditor(ListEditor):
                             lambda c: (e.__setitem__("color", c), self.touch()))
         f.addRow("名前:", name)
         f.addRow("名前色:", color)
+
+        protag = QCheckBox("主人公（プレイヤー操作キャラ）にする")
+        protag.setChecked(bool(e.get("isProtagonist", False)))
+        show = QCheckBox("立ち絵を表示する")
+        show.setChecked(bool(e.get("showSprite", True)))
+
+        def on_protag(v):
+            e["isProtagonist"] = v
+            if v:
+                # 主人公は既定で立ち絵非表示
+                e["showSprite"] = False
+                show.setChecked(False)
+            self.touch()
+        protag.toggled.connect(on_protag)
+        show.toggled.connect(lambda v: (e.__setitem__("showSprite", v), self.touch()))
+        f.addRow("", protag)
+        f.addRow("", show)
+        hint = QLabel("※ 主人公は通常、立ち絵を表示しません（名前だけ表示）。\n"
+                      "　立ち絵を出したい場合は「立ち絵を表示する」をオンに。")
+        hint.setStyleSheet("color:#888;")
+        f.addRow("", hint)
         host = QWidget(); host.setLayout(f)
         self.form_host.addWidget(host)
 

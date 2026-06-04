@@ -115,6 +115,13 @@ class SceneEditor(QWidget):
             self.current_scene = None
             self._reload_commands()
 
+    def select_scene(self, scene_id: str):
+        """指定IDのシーンを一覧で選択する（フローチャックから呼ばれる）。"""
+        for i, s in enumerate(self.project.scenes):
+            if s["id"] == scene_id:
+                self.scene_list.setCurrentRow(i)
+                return
+
     def _refresh_scene_labels(self):
         start = self.project.meta.get("startScene", "")
         for i, s in enumerate(self.project.scenes):

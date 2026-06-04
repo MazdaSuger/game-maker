@@ -19,6 +19,8 @@ from .editors import (
     CharacterEditor, ItemEditor, VariableEditor, GaugeEditor,
     BackgroundEditor, BgmEditor, EndingEditor,
 )
+from .layout_editor import LayoutEditor
+from .flowchart import FlowchartTab
 from .player import PlayerWidget
 from .save import SaveManager, default_save_dir
 from .exporter import export_to_html, export_to_zip
@@ -172,10 +174,13 @@ class MainWindow(QMainWindow):
         self.background_editor = BackgroundEditor(self.project)
         self.bgm_editor = BgmEditor(self.project)
         self.ending_editor = EndingEditor(self.project)
+        self.layout_editor = LayoutEditor(self.project)
+        self.flowchart_tab = FlowchartTab(self.project)
         self.settings_editor = SettingsEditor(self.project)
 
         self._editors = [
             ("🎬 シーン", self.scene_editor),
+            ("🗺 フローチャート", self.flowchart_tab),
             ("🧑 キャラ・表情", self.character_editor),
             ("🎒 アイテム", self.item_editor),
             ("🔢 変数", self.variable_editor),
@@ -183,6 +188,7 @@ class MainWindow(QMainWindow):
             ("🖼 背景", self.background_editor),
             ("🎵 BGM", self.bgm_editor),
             ("🏁 エンディング", self.ending_editor),
+            ("🎨 レイアウト", self.layout_editor),
             ("⚙ 設定", self.settings_editor),
         ]
         for label, w in self._editors:
@@ -190,12 +196,22 @@ class MainWindow(QMainWindow):
 
         # シーン変更時に設定タブの開始シーン候補を更新
         self.scene_editor.changed.connect(self._on_project_changed)
+        self.layout_editor.changed.connect(self._on_project_changed)
+        self.flowchart_tab.sceneOpenRequested.connect(self._open_scene_from_flowchart)
         self.tabs.currentChanged.connect(self._on_tab_changed)
 
+    def _open_scene_from_flowchart(self, scene_id: str):
+        self.tabs.setCurrentWidget(self.scene_editor)
+        self.scene_editor.select_scene(scene_id)
+
     def _on_tab_changed(self, _):
+        cur = self.tabs.currentWidget()
         # 設定タブ表示時に開始シーン一覧をリフレッシュ
-        if self.tabs.currentWidget() is self.settings_editor:
+        if cur is self.settings_editor:
             self.settings_editor.reload()
+        # フローチャートは最新のシーン構成で再描画
+        elif cur is self.flowchart_tab:
+            self.flowchart_tab.rebuild()
 
     def _on_project_changed(self):
         self.project.dirty = True

@@ -402,6 +402,63 @@
 
   function toTitle() { showTitle(); }
 
+  // ---------------- レイアウト / テーマ ----------------
+  const DEFAULT_LAYOUT = {
+    message: { x: 4, y: 72, w: 92, h: 26 },
+    choices: { x: 50, y: 42 },
+    sprite:  { x: 50, y: 99, scale: 80 },
+    gauges:  { x: 1.2, y: 2 },
+    items:   { x: 94, y: 2 },
+    menu:    { x: 63, y: 9 },
+  };
+
+  function layoutOf(key) {
+    const L = DATA.layout || {};
+    return Object.assign({}, DEFAULT_LAYOUT[key], L[key] || {});
+  }
+
+  function applyLayout() {
+    const m = layoutOf("message");
+    Object.assign(elMsgWin.style,
+      { left: m.x + "%", top: m.y + "%", width: m.w + "%",
+        height: m.h + "%", bottom: "auto" });
+    const g = layoutOf("gauges");
+    Object.assign(elGauges.style, { left: g.x + "%", top: g.y + "%", right: "auto" });
+    const it = layoutOf("items");
+    Object.assign($("items-btn").style,
+      { left: it.x + "%", top: it.y + "%", right: "auto" });
+    const mn = layoutOf("menu");
+    Object.assign($("menu").style, { left: mn.x + "%", top: mn.y + "%", right: "auto" });
+    const c = layoutOf("choices");
+    Object.assign(elChoices.style,
+      { left: c.x + "%", top: c.y + "%", transform: "translate(-50%,-50%)" });
+    const sp = layoutOf("sprite");
+    Object.assign(elChar.style,
+      { left: sp.x + "%", bottom: (100 - sp.y) + "%", height: sp.scale + "%",
+        transform: "translateX(-50%)" });
+  }
+
+  function applyTheme() {
+    const t = DATA.theme || {};
+    const rules = [];
+    const bg = (sel, path) => {
+      if (path) rules.push(
+        `${sel}{background-image:url("${path}");background-size:100% 100%;` +
+        `background-repeat:no-repeat;border-image:none;}`);
+    };
+    bg("#msgwin", t.msgWindowImage);
+    bg(".choice-btn", t.choiceButtonImage);
+    bg(".title-btn", t.titleButtonImage);
+    bg("#items-btn", t.itemsButtonImage);
+    if (rules.length) {
+      const st = document.createElement("style");
+      st.textContent = rules.join("\n");
+      document.head.appendChild(st);
+    }
+  }
+
   // 開始
+  applyTheme();
+  applyLayout();
   showTitle();
 })();

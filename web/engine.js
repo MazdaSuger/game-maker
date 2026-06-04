@@ -227,8 +227,12 @@
 
     if (t === "say") {
       const ch = this.character(cmd.charId);
-      st.char_id = cmd.charId || "";
-      st.expr_id = cmd.exprId || "";
+      // showSprite=false（主人公など）のキャラは直前の立ち絵を維持
+      const show = ch ? (ch.showSprite !== false) : false;
+      if (show) {
+        st.char_id = cmd.charId || "";
+        st.expr_id = cmd.exprId || "";
+      }
       return {
         kind: "say",
         name: ch ? ch.name : "",

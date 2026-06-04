@@ -54,6 +54,63 @@ VAR_OPS = [("set", "代入 ="), ("add", "加算 +="), ("sub", "減算 -="),
 GAUGE_OPS = [("set", "代入 ="), ("add", "加算 +="), ("sub", "減算 -=")]
 
 
+# ---------------------------------------------------------------------------
+# レイアウト（コンポーネント表示位置）とテーマ（コンポーネント画像）
+# ---------------------------------------------------------------------------
+# 位置は画面サイズに対する百分率。x,y は要素の左上（spriteのみ中央下）。
+DEFAULT_LAYOUT = {
+    "message": {"x": 4.0, "y": 72.0, "w": 92.0, "h": 26.0},
+    "choices": {"x": 50.0, "y": 42.0},   # 中央アンカー
+    "sprite":  {"x": 50.0, "y": 99.0, "scale": 80.0},  # 中央下アンカー
+    "gauges":  {"x": 1.2, "y": 2.0},     # 左上
+    "items":   {"x": 94.0, "y": 2.0},    # 左上座標（右上付近）
+    "menu":    {"x": 63.0, "y": 9.0},
+    "title":   {"x": 50.0, "y": 38.0},   # タイトルのボタン群中央
+}
+
+# レイアウト編集対象（id, ラベル, 種別）
+LAYOUT_ELEMENTS = [
+    ("message", "セリフ枠", "box"),
+    ("sprite",  "立ち絵",   "sprite"),
+    ("choices", "選択肢",   "point"),
+    ("gauges",  "ゲージ",   "point"),
+    ("items",   "アイテム", "point"),
+    ("menu",    "メニュー", "point"),
+]
+
+# テーマ（コンポーネントの取り込み画像）
+DEFAULT_THEME = {
+    "msgWindowImage": "",     # セリフ枠の背景画像
+    "choiceButtonImage": "",  # 選択肢ボタンの背景画像
+    "titleButtonImage": "",   # タイトルボタンの背景画像
+    "itemsButtonImage": "",   # アイテムボタンの画像
+}
+
+THEME_FIELDS = [
+    ("msgWindowImage", "セリフ枠の背景"),
+    ("choiceButtonImage", "選択肢ボタンの背景"),
+    ("titleButtonImage", "タイトルボタンの背景"),
+    ("itemsButtonImage", "アイテムボタンの画像"),
+]
+
+
+def merged_layout(project: "Project") -> dict:
+    """プロジェクトのレイアウトを既定値とマージして返す（旧データ互換）。"""
+    out = {k: dict(v) for k, v in DEFAULT_LAYOUT.items()}
+    for key, val in (project.data.get("layout") or {}).items():
+        if key in out and isinstance(val, dict):
+            out[key].update(val)
+        else:
+            out[key] = val
+    return out
+
+
+def merged_theme(project: "Project") -> dict:
+    out = dict(DEFAULT_THEME)
+    out.update(project.data.get("theme") or {})
+    return out
+
+
 def empty_condition() -> dict:
     """空の条件式を返す。terms が空なら常に真として扱う。"""
     return {"logic": "and", "terms": []}
@@ -223,6 +280,8 @@ class Project:
 # ---------------------------------------------------------------------------
 def default_project() -> dict:
     hero = uid("char")
+    player = uid("char")
+    p_normal = uid("expr")
     e_normal, e_smile, e_sad = uid("expr"), uid("expr"), uid("expr")
     bg_room, bg_night = uid("bg"), uid("bg")
     bgm_main = uid("bgm")
@@ -249,10 +308,15 @@ def default_project() -> dict:
              "initial": 50, "color": "#ff6b9d", "show": True},
         ],
         "characters": [
-            {"id": hero, "name": "ヒロイン", "color": "#ffb6c1", "expressions": [
+            {"id": hero, "name": "ヒロイン", "color": "#ffb6c1",
+             "isProtagonist": False, "showSprite": True, "expressions": [
                 {"id": e_normal, "name": "通常", "image": ""},
                 {"id": e_smile, "name": "笑顔", "image": ""},
                 {"id": e_sad, "name": "悲しい", "image": ""},
+            ]},
+            {"id": player, "name": "主人公", "color": "#9fd3ff",
+             "isProtagonist": True, "showSprite": False, "expressions": [
+                {"id": p_normal, "name": "通常", "image": ""},
             ]},
         ],
         "items": [
@@ -281,6 +345,8 @@ def default_project() -> dict:
                 {"id": uid("cmd"), "type": "narrate", "text": "ある晴れた日のことだった。"},
                 {"id": uid("cmd"), "type": "nameInput", "varName": "playerName",
                  "prompt": "あなたの名前は？"},
+                {"id": uid("cmd"), "type": "say", "charId": player, "exprId": p_normal,
+                 "text": "（さて、どこへ行こうか……）"},
                 {"id": uid("cmd"), "type": "say", "charId": hero, "exprId": e_smile,
                  "text": "はじめまして、{playerName}さん！"},
                 {"id": uid("cmd"), "type": "choice", "prompt": "どう答える？", "options": [
@@ -336,6 +402,8 @@ def default_project() -> dict:
                 {"id": uid("cmd"), "type": "ending", "endingId": end_secret},
             ]},
         ],
+        "layout": {k: dict(v) for k, v in DEFAULT_LAYOUT.items()},
+        "theme": dict(DEFAULT_THEME),
     }
 
 

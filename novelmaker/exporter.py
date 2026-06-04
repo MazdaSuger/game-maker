@@ -41,6 +41,13 @@ def _iter_asset_fields(data: dict):
             yield ex, "image"
     for tr in data.get("bgm", []):
         yield tr, "path"
+    # テーマ（コンポーネント画像）
+    theme = data.get("theme")
+    if isinstance(theme, dict):
+        for key in ("msgWindowImage", "choiceButtonImage",
+                    "titleButtonImage", "itemsButtonImage"):
+            if key in theme:
+                yield theme, key
 
 
 def collect_assets(data: dict):

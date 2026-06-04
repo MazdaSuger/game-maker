@@ -16,9 +16,14 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer, QRect, Signal
 from PySide6.QtGui import QPainter, QColor, QPixmap, QFont, QFontMetrics
 
-from .model import Project
+from .model import Project, merged_layout, merged_theme
 from .runtime import Runtime, GameState
 from .save import SaveManager
+
+
+def _qss_url(path: str) -> str:
+    """QSS 用にパスを正規化（バックスラッシュ→スラッシュ）。"""
+    return path.replace("\\", "/")
 
 # BGM（任意・環境に無ければ無音で続行）
 try:
@@ -246,7 +251,25 @@ class PlayerWidget(QWidget):
         return ov
 
     def _apply_styles(self):
-        self.setStyleSheet(PLAYER_QSS)
+        self.setStyleSheet(PLAYER_QSS + self._theme_qss())
+
+    def _theme_qss(self) -> str:
+        """テーマ（取り込み画像）に応じた追加スタイルを生成する。"""
+        t = merged_theme(self.project)
+        rules = []
+
+        def img_rule(selector, path, extra=""):
+            if path and os.path.exists(path):
+                rules.append(
+                    f'{selector} {{ border-image: url("{_qss_url(path)}") '
+                    f'0 0 0 0 stretch stretch; background: transparent; '
+                    f'border: none; {extra} }}')
+
+        img_rule("#msgWin", t.get("msgWindowImage", ""))
+        img_rule("#choiceBtn", t.get("choiceButtonImage", ""))
+        img_rule("#titleBtn", t.get("titleButtonImage", ""))
+        img_rule("#itemsBtn", t.get("itemsButtonImage", ""))
+        return "\n".join(rules)
 
     # ------------------------------------------------------------------
     # 開始 / 終了
@@ -534,20 +557,26 @@ class PlayerWidget(QWidget):
         ch = self.project.character(st.char_id)
         if not ch:
             return
+        # 立ち絵非表示キャラは描かない（念のため）
+        if not ch.get("showSprite", True):
+            return
         ex = self.project.expression(st.char_id, st.expr_id)
         pix = self._pixmap(ex.get("image", "")) if ex else None
-        avail_h = int(rect.height() * 0.78)
+        sp = merged_layout(self.project)["sprite"]
+        avail_h = int(rect.height() * (sp.get("scale", 80) / 100.0))
+        cx = int(sp.get("x", 50) / 100.0 * rect.width())   # 中央x
+        by = int(sp.get("y", 99) / 100.0 * rect.height())  # 下端y
         if pix is not None:
             scaled = pix.scaledToHeight(avail_h, Qt.SmoothTransformation)
-            x = (rect.width() - scaled.width()) // 2
-            y = rect.height() - scaled.height() - self._msg_height() + 10
+            x = cx - scaled.width() // 2
+            y = by - scaled.height()
             p.drawPixmap(x, y, scaled)
         else:
             # プレースホルダ（色付き矩形＋名前/表情）
             w = int(rect.width() * 0.22)
             h = avail_h
-            x = (rect.width() - w) // 2
-            y = rect.height() - h - self._msg_height() + 10
+            x = cx - w // 2
+            y = by - h
             color = QColor(ch.get("color", "#888888"))
             color.setAlpha(70)
             p.setBrush(color)
@@ -713,21 +742,31 @@ class PlayerWidget(QWidget):
 
     def _layout_children(self):
         w, h = self.width(), self.height()
-        mh = self._msg_height()
-        # メッセージウィンドウ：下部
-        self.msg_frame.setGeometry(int(w * 0.04), h - mh - 12,
-                                   int(w * 0.92), mh)
-        # ゲージパネル：左上
+        L = merged_layout(self.project)
+
+        def px(v, total):
+            return int(v / 100.0 * total)
+
+        # メッセージウィンドウ（左上座標＋サイズ）
+        m = L["message"]
+        self.msg_frame.setGeometry(px(m["x"], w), px(m["y"], h),
+                                   px(m["w"], w), px(m["h"], h))
+        # ゲージパネル（左上座標）
+        g = L["gauges"]
         self.gauge_panel.adjustSize()
-        self.gauge_panel.move(12, 12)
-        # アイテムボタン：右上
-        self.items_btn.move(w - 56, 12)
-        # メニュー：右上（アイテムボタンの下）
+        self.gauge_panel.move(px(g["x"], w), px(g["y"], h))
+        # アイテムボタン（左上座標）
+        it = L["items"]
+        self.items_btn.move(px(it["x"], w), px(it["y"], h))
+        # メニュー（左上座標）
+        mn = L["menu"]
         self.menu_frame.adjustSize()
-        self.menu_frame.move(w - self.menu_frame.width() - 12, 64)
-        # 選択肢：中央
-        self.choice_frame.setGeometry(int(w * 0.2), int(h * 0.22),
-                                      int(w * 0.6), int(h * 0.5))
+        self.menu_frame.move(px(mn["x"], w), px(mn["y"], h))
+        # 選択肢（中央アンカー）
+        c = L["choices"]
+        cw, chh = int(w * 0.6), int(h * 0.5)
+        self.choice_frame.setGeometry(px(c["x"], w) - cw // 2,
+                                      px(c["y"], h) - chh // 2, cw, chh)
         # オーバーレイ：全面
         for ov in (self.name_overlay, self.items_overlay,
                    self.save_overlay, self.ending_overlay, self.title_overlay):

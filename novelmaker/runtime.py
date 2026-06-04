@@ -286,8 +286,12 @@ class Runtime:
 
         if t == "say":
             ch = self.project.character(cmd.get("charId", ""))
-            self.state.char_id = cmd.get("charId", "")
-            self.state.expr_id = cmd.get("exprId", "")
+            # 立ち絵を表示するキャラのみ、表示中の立ち絵を切り替える。
+            # 主人公など showSprite=False のキャラは直前の立ち絵を維持する。
+            show = bool(ch.get("showSprite", True)) if ch else False
+            if show:
+                self.state.char_id = cmd.get("charId", "")
+                self.state.expr_id = cmd.get("exprId", "")
             return {
                 "kind": "say",
                 "name": ch["name"] if ch else "",
