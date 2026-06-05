@@ -44,11 +44,15 @@ COMMAND_TYPES = [
     ("choice",    "選択肢分岐",   "🔀"),
     ("if",        "条件分岐",     "❓"),
     ("jump",      "シーン移動",   "➡"),
+    ("endroll",   "エンドロール", "🎞"),
     ("ending",    "エンディング", "🏁"),
 ]
 
 COMMAND_LABELS = {t: label for t, label, _ in COMMAND_TYPES}
 COMMAND_ICONS = {t: icon for t, _, icon in COMMAND_TYPES}
+
+# セリフの「立ち絵表示なし」を表す表情ID（差分セレクトの既定候補）
+NO_SPRITE = "__none__"
 
 # 変数操作の演算子
 VAR_OPS = [("set", "代入 ="), ("add", "加算 +="), ("sub", "減算 -="),
@@ -130,7 +134,7 @@ def new_command(ctype: str) -> dict:
     """指定タイプのコマンド初期値を返す。"""
     base = {"id": uid("cmd"), "type": ctype}
     if ctype == "say":
-        base.update(charId="", exprId="", text="")
+        base.update(charId="", exprId=NO_SPRITE, text="")  # 既定は立ち絵表示なし
     elif ctype == "narrate":
         base.update(text="")
     elif ctype == "charExit":
@@ -140,7 +144,9 @@ def new_command(ctype: str) -> dict:
     elif ctype == "blackout":
         base.update(mode="on")  # on=暗転 / off=解除
     elif ctype == "bgm":
-        base.update(action="play", bgmId="", loop=True)
+        base.update(action="play", bgmId="", loop=True, fadeMs=0)
+    elif ctype == "endroll":
+        base.update(text="", speed=60)  # speed = スクロール速度(px/秒)
     elif ctype == "se":
         base.update(seId="")
     elif ctype == "cg":
@@ -372,7 +378,7 @@ def default_project() -> dict:
             {"id": s_start, "name": "オープニング", "commands": [
                 {"id": uid("cmd"), "type": "bg", "bgId": bg_room},
                 {"id": uid("cmd"), "type": "bgm", "action": "play",
-                 "bgmId": bgm_main, "loop": True},
+                 "bgmId": bgm_main, "loop": True, "fadeMs": 1500},
                 {"id": uid("cmd"), "type": "narrate", "text": "ある晴れた日のことだった。"},
                 {"id": uid("cmd"), "type": "nameInput", "varName": "playerName",
                  "prompt": "あなたの名前は？"},
@@ -420,6 +426,12 @@ def default_project() -> dict:
                  "targetTrue": s_true, "targetFalse": s_normal},
             ]},
             {"id": s_true, "name": "[END] トゥルー", "commands": [
+                {"id": uid("cmd"), "type": "bgm", "action": "stop", "fadeMs": 2000},
+                {"id": uid("cmd"), "type": "endroll",
+                 "text": "― 完 ―\n\n\n企画・シナリオ\n{playerName}\n\n\n"
+                         "イラスト\nあなた\n\n\n音楽\nあなた\n\n\n"
+                         "Special Thanks\nプレイしてくれたあなた\n\n\n\n"
+                         "ノベルメーカーで制作", "speed": 70},
                 {"id": uid("cmd"), "type": "ending", "endingId": end_true},
             ]},
             {"id": s_normal, "name": "[END] ノーマル", "commands": [
@@ -464,11 +476,15 @@ def describe_command(cmd: dict, project: "Project") -> str:
     if t == "blackout":
         return "暗転する" if cmd.get("mode") == "on" else "暗転を解除"
     if t == "bgm":
+        fade = cmd.get("fadeMs", 0)
+        fade_s = f"（フェード{fade}ms）" if fade else ""
         if cmd.get("action") == "stop":
-            return "BGM停止"
+            return f"BGM停止{fade_s}"
         bgm = project.bgm_track(cmd.get("bgmId", ""))
         loop = "（ループ）" if cmd.get("loop", True) else ""
-        return f"BGM再生 → {bgm['name'] if bgm else '（未設定）'}{loop}"
+        return f"BGM再生 → {bgm['name'] if bgm else '（未設定）'}{loop}{fade_s}"
+    if t == "endroll":
+        return f"エンドロール（{_short(cmd.get('text',''), 24)}）"
     if t == "se":
         se = project.se_track(cmd.get("seId", ""))
         return f"効果音 → {se['name'] if se else '（未設定）'}"

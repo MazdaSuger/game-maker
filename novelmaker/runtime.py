@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from typing import Any, Optional
 
-from .model import Project
+from .model import Project, NO_SPRITE
 
 # テキスト内の {変数名} を置換するためのパターン
 _VAR_PATTERN = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
@@ -139,6 +139,7 @@ class GameState:
         self.char_id: str = ""                # 現在表示中のキャラ
         self.expr_id: str = ""
         self.bgm_id: str = ""                 # 再生中BGM
+        self.bgm_fade: int = 0                # 直近のBGM切替フェード(ms)
         self.discovered_endings: list[str] = []  # 到達済みエンディング
 
     # --- シリアライズ ---
@@ -155,6 +156,7 @@ class GameState:
             "char_id": self.char_id,
             "expr_id": self.expr_id,
             "bgm_id": self.bgm_id,
+            "bgm_fade": self.bgm_fade,
             "discovered_endings": self.discovered_endings,
         }
 
@@ -172,6 +174,7 @@ class GameState:
         s.char_id = d.get("char_id", "")
         s.expr_id = d.get("expr_id", "")
         s.bgm_id = d.get("bgm_id", "")
+        s.bgm_fade = d.get("bgm_fade", 0)
         s.discovered_endings = list(d.get("discovered_endings", []))
         return s
 
@@ -239,7 +242,7 @@ class Runtime:
                 if var:
                     self.state.variables[var] = text_input or ""
                 self.state.cmd_index += 1
-            elif kind in ("say", "narrate"):
+            elif kind in ("say", "narrate", "endroll"):
                 self.state.cmd_index += 1
             # choice は choose() で解決。ending/end は終端
             self._pending = None
@@ -296,12 +299,17 @@ class Runtime:
 
         if t == "say":
             ch = self.project.character(cmd.get("charId", ""))
+            expr_id = cmd.get("exprId", "")
             # 立ち絵を表示するキャラのみ、表示中の立ち絵を切り替える。
-            # 主人公など showSprite=False のキャラは直前の立ち絵を維持する。
+            # ・showSprite=False のキャラ（主人公など）
+            # ・表情が「立ち絵表示なし」(NO_SPRITE)
+            # の場合は直前の立ち絵を維持する。
             show = bool(ch.get("showSprite", True)) if ch else False
+            if expr_id == NO_SPRITE:
+                show = False
             if show:
                 self.state.char_id = cmd.get("charId", "")
-                self.state.expr_id = cmd.get("exprId", "")
+                self.state.expr_id = expr_id
             return {
                 "kind": "say",
                 "name": ch["name"] if ch else "",
@@ -331,11 +339,17 @@ class Runtime:
             return None
 
         if t == "bgm":
+            self.state.bgm_fade = int(cmd.get("fadeMs", 0) or 0)
             if cmd.get("action") == "stop":
                 self.state.bgm_id = ""
             else:
                 self.state.bgm_id = cmd.get("bgmId", "")
             return None
+
+        if t == "endroll":
+            return {"kind": "endroll",
+                    "text": self._interp(cmd.get("text", "")),
+                    "speed": _to_number(cmd.get("speed", 60)) or 60}
 
         if t == "se":
             sid = cmd.get("seId", "")

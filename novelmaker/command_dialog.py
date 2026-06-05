@@ -11,13 +11,13 @@ import copy
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QComboBox, QLineEdit,
     QPlainTextEdit, QCheckBox, QPushButton, QLabel, QGroupBox, QWidget,
-    QScrollArea, QFrame,
+    QScrollArea, QFrame, QSpinBox,
 )
 from PySide6.QtCore import Qt
 
 from .model import (
     Project, COMMAND_LABELS, COMMAND_ICONS, VAR_OPS, GAUGE_OPS,
-    empty_condition, uid,
+    empty_condition, uid, NO_SPRITE,
 )
 from .condition_widget import ConditionWidget
 
@@ -115,10 +115,12 @@ class CommandDialog(QDialog):
         cid = self.char_cb.currentData()
         ch = self.project.character(cid)
         self.expr_cb.clear()
+        # 既定の差分候補として「立ち絵表示なし」を先頭に追加
+        self.expr_cb.addItem("（立ち絵表示なし）", NO_SPRITE)
         if ch:
             for e in ch.get("expressions", []):
                 self.expr_cb.addItem(e["name"], e["id"])
-            set_combo_value(self.expr_cb, self.cmd.get("exprId", ""))
+        set_combo_value(self.expr_cb, self.cmd.get("exprId", NO_SPRITE))
 
     def _form_charExit(self):
         f = QFormLayout()
@@ -163,9 +165,36 @@ class CommandDialog(QDialog):
                              self.cmd.get("bgmId", ""), none_label="（なし）")
         self.loop_cb = QCheckBox("ループ再生する")
         self.loop_cb.setChecked(bool(self.cmd.get("loop", True)))
+        self.fade_spin = QSpinBox()
+        self.fade_spin.setRange(0, 60000)
+        self.fade_spin.setSingleStep(250)
+        self.fade_spin.setSuffix(" ms")
+        self.fade_spin.setValue(int(self.cmd.get("fadeMs", 0) or 0))
         f.addRow("動作:", self.action_cb)
         f.addRow("曲:", self.bgm_cb)
         f.addRow("", self.loop_cb)
+        f.addRow("フェード時間:", self.fade_spin)
+        hint = QLabel("※ 再生=フェードイン / 停止=フェードアウト。0でフェードなし。")
+        hint.setStyleSheet("color:#888;")
+        f.addRow("", hint)
+        self._add_form(f)
+
+    def _form_endroll(self):
+        f = QFormLayout()
+        self.text_edit = QPlainTextEdit(self.cmd.get("text", ""))
+        self.text_edit.setPlaceholderText(
+            "エンドロール本文（改行で複数行）。下から上へスクロールします。\n"
+            "{変数名} で変数を埋め込めます。")
+        self.text_edit.setMinimumHeight(160)
+        self.speed_spin = QSpinBox()
+        self.speed_spin.setRange(10, 400)
+        self.speed_spin.setSuffix(" px/秒")
+        self.speed_spin.setValue(int(self.cmd.get("speed", 60) or 60))
+        f.addRow("本文:", self.text_edit)
+        f.addRow("スクロール速度:", self.speed_spin)
+        hint = QLabel("※ 再生中はセリフ枠が消え、クリックでスキップできます。")
+        hint.setStyleSheet("color:#888;")
+        f.addRow("", hint)
         self._add_form(f)
 
     def _form_se(self):
@@ -346,6 +375,10 @@ class CommandDialog(QDialog):
             self.cmd["action"] = self.action_cb.currentData()
             self.cmd["bgmId"] = self.bgm_cb.currentData() or ""
             self.cmd["loop"] = self.loop_cb.isChecked()
+            self.cmd["fadeMs"] = self.fade_spin.value()
+        elif t == "endroll":
+            self.cmd["text"] = self.text_edit.toPlainText()
+            self.cmd["speed"] = self.speed_spin.value()
         elif t == "se":
             self.cmd["seId"] = self.se_cb.currentData() or ""
         elif t == "cg":

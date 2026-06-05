@@ -99,6 +99,17 @@ html, body {
 }
 .choice-btn:hover { background: rgba(70,90,160,0.95); border-color: #9fe3ff; }
 
+/* エンドロール */
+#endroll {
+  position: absolute; inset: 0; background: #05060a; overflow: hidden;
+  z-index: 18; cursor: pointer;
+}
+#endroll.hidden { display: none; }
+#endroll-text {
+  position: absolute; left: 10%; width: 80%; text-align: center;
+  color: #f2f4ff; font-size: 22px; line-height: 1.9; white-space: pre-line;
+}
+
 /* オーバーレイ */
 .overlay {
   position: absolute; inset: 0; background: rgba(0,0,0,0.72);

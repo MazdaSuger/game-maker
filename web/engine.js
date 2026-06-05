@@ -9,6 +9,7 @@
   "use strict";
 
   const VAR_PATTERN = /\{([A-Za-z_][A-Za-z0-9_]*)\}/g;
+  const NO_SPRITE = "__none__";
 
   function toNumber(v) {
     const n = parseFloat(v);
@@ -119,7 +120,7 @@
       variables: {}, gauges: {}, items: [],
       scene_id: "", cmd_index: 0,
       bg_id: "", blackout: false, cg_id: "", char_id: "", expr_id: "",
-      bgm_id: "", discovered_endings: [],
+      bgm_id: "", bgm_fade: 0, discovered_endings: [],
     };
   }
 
@@ -167,7 +168,7 @@
         const v = this._pending.varName;
         if (v) this.state.variables[v] = textInput || "";
         this.state.cmd_index += 1;
-      } else if (kind === "say" || kind === "narrate") {
+      } else if (kind === "say" || kind === "narrate" || kind === "endroll") {
         this.state.cmd_index += 1;
       }
       this._pending = null;
@@ -236,11 +237,13 @@
 
     if (t === "say") {
       const ch = this.character(cmd.charId);
-      // showSprite=false（主人公など）のキャラは直前の立ち絵を維持
-      const show = ch ? (ch.showSprite !== false) : false;
+      const exprId = cmd.exprId || "";
+      // showSprite=false（主人公など）や「立ち絵表示なし」は直前の立ち絵を維持
+      let show = ch ? (ch.showSprite !== false) : false;
+      if (exprId === NO_SPRITE) show = false;
       if (show) {
         st.char_id = cmd.charId || "";
-        st.expr_id = cmd.exprId || "";
+        st.expr_id = exprId;
       }
       return {
         kind: "say",
@@ -259,8 +262,13 @@
     if (t === "bg") { st.bg_id = cmd.bgId || ""; return null; }
     if (t === "blackout") { st.blackout = (cmd.mode || "on") === "on"; return null; }
     if (t === "bgm") {
+      st.bgm_fade = parseInt(cmd.fadeMs || 0, 10) || 0;
       st.bgm_id = (cmd.action === "stop") ? "" : (cmd.bgmId || "");
       return null;
+    }
+    if (t === "endroll") {
+      return { kind: "endroll", text: this._interp(cmd.text),
+               speed: toNumber(cmd.speed) || 60 };
     }
     if (t === "se") {
       if (cmd.seId) { this._sfx = this._sfx || []; this._sfx.push(cmd.seId); }

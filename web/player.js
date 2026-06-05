@@ -38,6 +38,11 @@
     updateStage();
     (ev.sfx || []).forEach(playSe);   // 効果音
     elChoices.style.display = "none";
+    if (ev.kind !== "endroll") {      // エンドロール解除・UI復帰
+      stopEndroll();
+      if (!titleMode) { $("items-btn").style.display = ""; $("menu").style.display = "flex"; }
+    }
+    if (ev.kind === "endroll") { startEndroll(ev.text || "", ev.speed || 60); return; }
     hideOverlay("ov-name"); // 入力以外では閉じる前提
 
     const k = ev.kind;
@@ -193,6 +198,35 @@
     updateBgm();
   }
 
+  // ---------------- エンドロール ----------------
+  let endrollTimer = null, endrollY = 0, endrollSpeed = 60;
+  function startEndroll(text, speed) {
+    setGameChrome(false);
+    elGauges.style.display = "none";
+    const wrap = $("endroll"), t = $("endroll-text");
+    t.textContent = text;
+    wrap.classList.remove("hidden");
+    endrollSpeed = Math.max(10, speed || 60);
+    endrollY = wrap.clientHeight;        // 画面下端から開始
+    t.style.top = endrollY + "px";
+    let last = performance.now();
+    clearInterval(endrollTimer);
+    endrollTimer = setInterval(() => {
+      const now = performance.now(), dt = (now - last) / 1000; last = now;
+      endrollY -= endrollSpeed * dt;
+      t.style.top = endrollY + "px";
+      if (endrollY + t.offsetHeight < 0) finishEndroll();
+    }, 16);
+  }
+  function stopEndroll() {
+    clearInterval(endrollTimer); endrollTimer = null;
+    $("endroll").classList.add("hidden");
+  }
+  function finishEndroll() { stopEndroll(); present(rt.advance()); }
+  function skipEndroll() {
+    if (!$("endroll").classList.contains("hidden")) finishEndroll();
+  }
+
   // ---------------- SE（効果音） ----------------
   function playSe(seId) {
     const track = ses[seId];
@@ -224,22 +258,52 @@
     elGauges.style.display = shownAny ? "" : "none";
   }
 
-  // ---------------- BGM ----------------
-  function updateBgm() {
-    const st = rt.state;
-    if (st.bgm_id === curBgm) return;
-    curBgm = st.bgm_id;
-    if (audio) { audio.pause(); audio = null; }
-    const track = bgms[st.bgm_id];
-    if (!track || !track.path) return;
+  // ---------------- BGM（フェード対応） ----------------
+  const BGM_VOL = 0.7;
+  function rampVolume(el, from, to, ms, onDone) {
+    if (!el) { if (onDone) onDone(); return; }
+    const steps = Math.max(1, Math.round(ms / 40));
+    let i = 0;
+    el.volume = Math.max(0, Math.min(1, from));
+    const iv = setInterval(() => {
+      i++;
+      const v = from + (to - from) * (i / steps);
+      try { el.volume = Math.max(0, Math.min(1, v)); } catch (e) {}
+      if (i >= steps) { clearInterval(iv); if (onDone) onDone(); }
+    }, 40);
+  }
+  function setBgm(bgmId, fadeMs) {
+    if (bgmId === curBgm) return;
+    curBgm = bgmId;
+    const fade = fadeMs || 0;
+    const old = audio;
+    if (!bgmId) {
+      if (old) {
+        if (fade > 0) rampVolume(old, old.volume, 0, fade, () => old.pause());
+        else old.pause();
+      }
+      audio = null;
+      return;
+    }
+    const track = bgms[bgmId];
+    if (!track || !track.path) { if (old) old.pause(); audio = null; return; }
     try {
-      audio = new Audio(track.path);
-      audio.loop = track.loop !== false;
-      audio.volume = 0.7;
-      const p = audio.play();
-      if (p && p.catch) p.catch(() => {}); // 自動再生制限は無視
+      const a = new Audio(track.path);
+      a.loop = track.loop !== false;
+      if (fade > 0) {
+        a.volume = 0;
+        const p = a.play(); if (p && p.catch) p.catch(() => {});
+        rampVolume(a, 0, BGM_VOL, fade);
+        if (old) rampVolume(old, old.volume, 0, fade, () => old.pause());
+      } else {
+        a.volume = BGM_VOL;
+        const p = a.play(); if (p && p.catch) p.catch(() => {});
+        if (old) old.pause();
+      }
+      audio = a;
     } catch (e) { /* noop */ }
   }
+  function updateBgm() { setBgm(rt.state.bgm_id, rt.state.bgm_fade || 0); }
 
   // ---------------- アイテム ----------------
   function showItems() {
@@ -339,9 +403,11 @@
 
   // ---------------- イベント結線 ----------------
   elMsgWin.addEventListener("click", onAdvance);
+  $("endroll").addEventListener("click", skipEndroll);
   document.addEventListener("keydown", (e) => {
-    if ((e.key === " " || e.key === "Enter") && !titleMode && !anyOverlayOpen()) {
-      e.preventDefault(); onAdvance();
+    if (e.key === " " || e.key === "Enter") {
+      if (!$("endroll").classList.contains("hidden")) { e.preventDefault(); skipEndroll(); }
+      else if (!titleMode && !anyOverlayOpen()) { e.preventDefault(); onAdvance(); }
     }
   });
   $("items-btn").onclick = showItems;
@@ -407,18 +473,7 @@
     if (!visible) { elChoices.style.display = "none"; elGauges.style.display = "none"; }
   }
 
-  function updateBgmById(bgmId) {
-    if (bgmId === curBgm) return;
-    curBgm = bgmId;
-    if (audio) { audio.pause(); audio = null; }
-    const track = bgms[bgmId];
-    if (!track || !track.path) return;
-    try {
-      audio = new Audio(track.path);
-      audio.loop = track.loop !== false; audio.volume = 0.7;
-      const p = audio.play(); if (p && p.catch) p.catch(() => {});
-    } catch (e) {}
-  }
+  function updateBgmById(bgmId) { setBgm(bgmId, 0); }
 
   function beginNew() {
     titleMode = false;

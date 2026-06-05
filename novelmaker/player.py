@@ -21,6 +21,9 @@ from .runtime import Runtime, GameState
 from .save import SaveManager
 
 
+BGM_VOLUME = 0.7  # BGM の基準音量
+
+
 def _qss_url(path: str) -> str:
     """QSS 用にパスを正規化（バックスラッシュ→スラッシュ）。"""
     return path.replace("\\", "/")
@@ -62,6 +65,13 @@ class PlayerWidget(QWidget):
         self._audio = None
         self._player = None
         self._cur_bgm = None
+        # BGM フェード用
+        self._fade_timer = QTimer(self)
+        self._fade_timer.setInterval(40)
+        self._fade_timer.timeout.connect(self._fade_step)
+        self._fade_target = BGM_VOLUME
+        self._fade_step_amt = 0.0
+        self._fade_stop_after = False
         # SE（効果音）: 同時発音できるよう小さなプールを用意
         self._se_pool = []
         self._se_idx = 0
@@ -243,6 +253,21 @@ class PlayerWidget(QWidget):
         tl.addLayout(btn_box)
         self.title_overlay.hide()
 
+        # エンドロール（縦スクロール）
+        self.endroll_overlay = QFrame(self)
+        self.endroll_overlay.setObjectName("endrollOverlay")
+        self.endroll_label = QLabel("", self.endroll_overlay)
+        self.endroll_label.setObjectName("endrollText")
+        self.endroll_label.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
+        self.endroll_label.setWordWrap(True)
+        self.endroll_overlay.mousePressEvent = lambda ev: self._skip_endroll()
+        self.endroll_overlay.hide()
+        self._endroll_speed = 60
+        self._endroll_y = 0.0
+        self._endroll_timer = QTimer(self)
+        self._endroll_timer.setInterval(16)
+        self._endroll_timer.timeout.connect(self._endroll_step)
+
         self._apply_styles()
 
     def _make_overlay(self, wide=False):
@@ -368,8 +393,18 @@ class PlayerWidget(QWidget):
         kind = ev.get("kind")
 
         self.choice_frame.hide()
+        # エンドロール以外ではエンドロールを止める／メニュー類を復帰
+        if kind != "endroll":
+            self._endroll_timer.stop()
+            self.endroll_overlay.hide()
+            if not self._title_mode:
+                self.items_btn.show()
+                self.menu_frame.show()
 
-        if kind in ("say", "narrate"):
+        if kind == "endroll":
+            self._start_endroll(ev.get("text", ""), ev.get("speed", 60))
+
+        elif kind in ("say", "narrate"):
             self.msg_frame.show()
             if kind == "say":
                 self.name_label.setText(ev.get("name", ""))
@@ -425,6 +460,44 @@ class PlayerWidget(QWidget):
         self._type_timer.stop()
         self._typing = False
         self.text_label.setText(self._full_text)
+
+    # --- エンドロール ---
+    def _start_endroll(self, text: str, speed):
+        # ゲーム中UIを隠す
+        self.msg_frame.hide()
+        self.gauge_panel.hide()
+        self.items_btn.hide()
+        self.menu_frame.hide()
+        self.choice_frame.hide()
+        self._endroll_speed = max(10, float(speed or 60))
+        w, h = self.width(), self.height()
+        self.endroll_overlay.setGeometry(0, 0, w, h)
+        self.endroll_label.setText(text or "")
+        self.endroll_label.setFixedWidth(int(w * 0.8))
+        self.endroll_label.adjustSize()
+        # 画面下端から開始
+        self._endroll_y = float(h)
+        self.endroll_label.move(int(w * 0.1), int(self._endroll_y))
+        self.endroll_overlay.show()
+        self.endroll_overlay.raise_()
+        self._endroll_timer.start()
+
+    def _endroll_step(self):
+        dt = self._endroll_timer.interval() / 1000.0
+        self._endroll_y -= self._endroll_speed * dt
+        self.endroll_label.move(self.endroll_label.x(), int(self._endroll_y))
+        # ラベル全体が画面上端より上に抜けたら終了
+        if self._endroll_y + self.endroll_label.height() < 0:
+            self._finish_endroll()
+
+    def _finish_endroll(self):
+        self._endroll_timer.stop()
+        self.endroll_overlay.hide()
+        self._present(self.runtime.advance())
+
+    def _skip_endroll(self):
+        if self.endroll_overlay.isVisible():
+            self._finish_endroll()
 
     # --- クリックで進める ---
     def _on_advance_click(self):
@@ -657,20 +730,55 @@ class PlayerWidget(QWidget):
         if bgm_id == self._cur_bgm:
             return
         self._cur_bgm = bgm_id
+        fade = max(0, int(getattr(self.runtime.state, "bgm_fade", 0) or 0))
         if not bgm_id:
-            self._player.stop()
+            # 停止（フェードアウト）
+            if fade > 0:
+                self._start_fade(0.0, fade, stop_after=True)
+            else:
+                self._fade_timer.stop()
+                self._player.stop()
             return
         track = self.project.bgm_track(bgm_id)
         if not track or not track.get("path") or not os.path.exists(track["path"]):
             self._player.stop()
             return
         try:
+            self._fade_timer.stop()
             self._player.setSource(QUrl.fromLocalFile(track["path"]))
             self._player.setLoops(QMediaPlayer.Infinite if track.get("loop", True) else 1)
-            self._audio.setVolume(0.7)
-            self._player.play()
+            if fade > 0:
+                self._audio.setVolume(0.0)
+                self._player.play()
+                self._start_fade(BGM_VOLUME, fade)
+            else:
+                self._audio.setVolume(BGM_VOLUME)
+                self._player.play()
         except Exception:
             pass
+
+    def _start_fade(self, target: float, ms: int, stop_after: bool = False):
+        steps = max(1, ms // self._fade_timer.interval())
+        cur = self._audio.volume()
+        self._fade_target = target
+        self._fade_stop_after = stop_after
+        self._fade_step_amt = (target - cur) / steps
+        self._fade_timer.start()
+
+    def _fade_step(self):
+        if not self._audio:
+            self._fade_timer.stop()
+            return
+        cur = self._audio.volume() + self._fade_step_amt
+        done = (self._fade_step_amt >= 0 and cur >= self._fade_target) or \
+               (self._fade_step_amt < 0 and cur <= self._fade_target)
+        if done:
+            cur = self._fade_target
+        self._audio.setVolume(max(0.0, min(1.0, cur)))
+        if done:
+            self._fade_timer.stop()
+            if self._fade_stop_after and self._player:
+                self._player.stop()
 
     def _stop_bgm(self):
         if self._player:
@@ -832,8 +940,8 @@ class PlayerWidget(QWidget):
         self.choice_frame.setGeometry(px(c["x"], w) - cw // 2,
                                       px(c["y"], h) - chh // 2, cw, chh)
         # オーバーレイ：全面
-        for ov in (self.name_overlay, self.items_overlay,
-                   self.save_overlay, self.ending_overlay, self.title_overlay):
+        for ov in (self.name_overlay, self.items_overlay, self.save_overlay,
+                   self.ending_overlay, self.title_overlay, self.endroll_overlay):
             ov.setGeometry(0, 0, w, h)
 
     def _raise_overlays(self):
@@ -844,7 +952,9 @@ class PlayerWidget(QWidget):
 
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key_Space, Qt.Key_Return, Qt.Key_Enter):
-            if not self._title_mode and not any(ov.isVisible() for ov in
+            if self.endroll_overlay.isVisible():
+                self._skip_endroll()
+            elif not self._title_mode and not any(ov.isVisible() for ov in
                        (self.name_overlay, self.items_overlay,
                         self.save_overlay, self.ending_overlay, self.title_overlay)):
                 self._on_advance_click()
@@ -929,6 +1039,8 @@ PlayerWidget { background:#000; }
 }
 #choiceBtn:hover { background: rgba(70,90,160,0.95); border-color:#9fe3ff; }
 #overlay { background: rgba(0,0,0,0.72); }
+#endrollOverlay { background: #05060a; }
+#endrollText { color: #f2f4ff; font-size: 22px; }
 #titleOverlay { background: rgba(0,0,0,0.55); }
 #titleName {
     font-size: 44px; font-weight: bold; color: #ffffff;
