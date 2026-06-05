@@ -168,7 +168,8 @@
         const v = this._pending.varName;
         if (v) this.state.variables[v] = textInput || "";
         this.state.cmd_index += 1;
-      } else if (kind === "say" || kind === "narrate" || kind === "endroll") {
+      } else if (kind === "say" || kind === "narrate" ||
+                 kind === "endroll" || kind === "itemGet") {
         this.state.cmd_index += 1;
       }
       this._pending = null;
@@ -286,13 +287,23 @@
     if (t === "gauge") { this._applyGauge(cmd); return null; }
     if (t === "item") {
       const iid = cmd.itemId || "";
-      if (iid) {
-        if (cmd.action === "remove") {
-          st.items = st.items.filter((x) => x !== iid);
-        } else if (!st.items.includes(iid)) {
-          st.items.push(iid);
-        }
+      if (!iid) return null;
+      const action = cmd.action || "add";
+      const notify = cmd.notify !== false;
+      const item = this.item(iid);
+      if (action === "remove") {
+        st.items = st.items.filter((x) => x !== iid);
+        return null;
       }
+      if (action === "use") {
+        if (st.items.includes(iid)) {
+          st.items = st.items.filter((x) => x !== iid);
+          if (notify && item) return itemEvent(item, "use");
+        }
+        return null;
+      }
+      if (!st.items.includes(iid)) st.items.push(iid);
+      if (notify && item) return itemEvent(item, "get");
       return null;
     }
     if (t === "choice") return this._buildChoice(cmd);
@@ -381,6 +392,18 @@
       _options_raw: raw,
     };
   };
+
+  function itemEvent(item, verb) {
+    return {
+      kind: "itemGet",
+      itemId: item.id || "",
+      name: item.name || "",
+      desc: item.desc || "",
+      icon: item.icon || "",
+      image: item.image || "",
+      verb: verb,
+    };
+  }
 
   function initialVarValue(v) {
     const t = v.type || "string";

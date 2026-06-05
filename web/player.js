@@ -71,6 +71,8 @@
       $("name-field").value = "";
       showOverlay("ov-name");
       $("name-field").focus();
+    } else if (k === "itemGet") {
+      showItemGet(ev);
     } else if (k === "ending") {
       showEnding(ev);
     } else if (k === "end") {
@@ -128,6 +130,22 @@
     const v = ($("name-field").value || "").trim() || "名無し";
     hideOverlay("ov-name");
     present(rt.advance(v));
+  }
+
+  // ---------------- アイテム入手/使用 ----------------
+  function showItemGet(ev) {
+    $("itemget-verb").textContent =
+      ev.verb === "use" ? `「${ev.name}」を使った` : `「${ev.name}」を手に入れた`;
+    const ic = $("itemget-icon");
+    if (ev.image) ic.innerHTML = `<img src="${ev.image}" alt="">`;
+    else ic.textContent = ev.icon || "📦";
+    $("itemget-name").textContent = ev.name || "";
+    $("itemget-desc").textContent = ev.desc || "";
+    showOverlay("ov-itemget");
+  }
+  function closeItemGet() {
+    hideOverlay("ov-itemget");
+    present(rt.advance());
   }
 
   // ---------------- エンディング ----------------
@@ -314,7 +332,9 @@
       const it = items[iid]; if (!it) return;
       const row = document.createElement("div");
       row.className = "item-row";
-      row.innerHTML = `<div style="font-size:22px">${esc(it.icon || "📦")}</div>` +
+      const icoHtml = it.image
+        ? `<img src="${it.image}" alt="">` : esc(it.icon || "📦");
+      row.innerHTML = `<div class="ico">${icoHtml}</div>` +
         `<div class="info"><b>${esc(it.name)}</b><div class="sub">${esc(it.desc || "")}</div></div>`;
       list.appendChild(row);
     });
@@ -397,7 +417,7 @@
     return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
   }
   function anyOverlayOpen() {
-    return ["ov-name", "ov-items", "ov-save", "ov-ending", "ov-title"]
+    return ["ov-name", "ov-items", "ov-save", "ov-ending", "ov-title", "ov-itemget"]
       .some((id) => !$(id).classList.contains("hidden"));
   }
 
@@ -407,6 +427,7 @@
   document.addEventListener("keydown", (e) => {
     if (e.key === " " || e.key === "Enter") {
       if (!$("endroll").classList.contains("hidden")) { e.preventDefault(); skipEndroll(); }
+      else if (!$("ov-itemget").classList.contains("hidden")) { e.preventDefault(); closeItemGet(); }
       else if (!titleMode && !anyOverlayOpen()) { e.preventDefault(); onAdvance(); }
     }
   });
@@ -422,6 +443,7 @@
   document.querySelectorAll("[data-close]").forEach((b) => {
     b.onclick = () => hideOverlay(b.dataset.close);
   });
+  $("itemget-ok").onclick = closeItemGet;
   $("name-ok").onclick = submitName;
   $("name-field").addEventListener("keydown", (e) => { if (e.key === "Enter") submitName(); });
   $("ending-restart").onclick = toTitle;

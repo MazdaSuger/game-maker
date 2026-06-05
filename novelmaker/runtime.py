@@ -242,7 +242,7 @@ class Runtime:
                 if var:
                     self.state.variables[var] = text_input or ""
                 self.state.cmd_index += 1
-            elif kind in ("say", "narrate", "endroll"):
+            elif kind in ("say", "narrate", "endroll", "itemGet"):
                 self.state.cmd_index += 1
             # choice は choose() で解決。ending/end は終端
             self._pending = None
@@ -379,13 +379,27 @@ class Runtime:
 
         if t == "item":
             iid = cmd.get("itemId", "")
-            if iid:
-                if cmd.get("action") == "remove":
-                    if iid in self.state.items:
-                        self.state.items.remove(iid)
-                else:
-                    if iid not in self.state.items:
-                        self.state.items.append(iid)
+            if not iid:
+                return None
+            action = cmd.get("action", "add")
+            notify = cmd.get("notify", True)
+            item = self.project.item(iid)
+            if action == "remove":
+                if iid in self.state.items:
+                    self.state.items.remove(iid)
+                return None
+            if action == "use":
+                # 使用＝所持していれば消費する
+                if iid in self.state.items:
+                    self.state.items.remove(iid)
+                    if notify and item:
+                        return self._item_event(item, "use")
+                return None
+            # add（入手）
+            if iid not in self.state.items:
+                self.state.items.append(iid)
+            if notify and item:
+                return self._item_event(item, "get")
             return None
 
         if t == "choice":
@@ -420,6 +434,18 @@ class Runtime:
 
         # 未知のコマンドは無視
         return None
+
+    def _item_event(self, item: dict, verb: str) -> dict:
+        """アイテム入手/使用の演出イベントを作る。"""
+        return {
+            "kind": "itemGet",
+            "itemId": item.get("id", ""),
+            "name": item.get("name", ""),
+            "desc": item.get("desc", ""),
+            "icon": item.get("icon", ""),
+            "image": item.get("image", ""),
+            "verb": verb,  # get / use
+        }
 
     def _with_sfx(self, event: dict) -> dict:
         """イベントに、この区間で再生するSE一覧を添える。"""

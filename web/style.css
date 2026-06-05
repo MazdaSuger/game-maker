@@ -148,6 +148,17 @@ html, body {
 .center { text-align: center; }
 .row-actions { display: flex; gap: 6px; }
 
+/* アイテム入手/使用 */
+#itemget-verb { color: #ffe9a8; }
+#itemget-icon {
+  text-align: center; font-size: 64px; min-height: 96px; line-height: 96px;
+}
+#itemget-icon img { height: 110px; vertical-align: middle; }
+#itemget-name { text-align: center; font-size: 22px; font-weight: bold; color: #ffe9a8; }
+#itemget-desc { text-align: center; color: #cdd; white-space: pre-line; margin-top: 6px; }
+.item-row .ico img { height: 44px; vertical-align: middle; }
+.item-row .ico { font-size: 26px; width: 52px; text-align: center; }
+
 /* タイトル画面 */
 .overlay-title {
   position: absolute; inset: 0; z-index: 15;  /* モーダル(20+)より下 */

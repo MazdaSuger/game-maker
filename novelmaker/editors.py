@@ -337,10 +337,11 @@ class ItemEditor(ListEditor):
 
     def default_entry(self):
         return {"id": uid("item"), "name": f"アイテム{len(self.entries())+1}",
-                "desc": "", "icon": "📦"}
+                "desc": "", "icon": "📦", "image": ""}
 
     def label_for(self, e):
-        return f'{e.get("icon","")} {e["name"]}'
+        mark = "🖼" if e.get("image") else e.get("icon", "")
+        return f'{mark} {e["name"]}'
 
     def build_form(self, e):
         f = QFormLayout()
@@ -349,13 +350,20 @@ class ItemEditor(ListEditor):
         icon = QLineEdit(e.get("icon", ""))
         icon.setMaxLength(4)
         icon.textChanged.connect(lambda t: (e.__setitem__("icon", t), self.touch()))
+        image = FilePicker(e.get("image", ""),
+                           lambda t: (e.__setitem__("image", t), self.touch()),
+                           "画像 (*.png *.jpg *.jpeg *.bmp *.webp)")
         desc = QPlainTextEdit(e.get("desc", ""))
         desc.setMinimumHeight(80)
         desc.textChanged.connect(
             lambda: (e.__setitem__("desc", desc.toPlainText()), self.touch()))
         f.addRow("名前:", name)
         f.addRow("アイコン(絵文字):", icon)
+        f.addRow("アイコン画像(PNG等):", image)
         f.addRow("説明:", desc)
+        hint = QLabel("※ 画像を設定すると、絵文字より優先して表示されます。")
+        hint.setStyleSheet("color:#888;")
+        f.addRow("", hint)
         host = QWidget(); host.setLayout(f)
         self.form_host.addWidget(host)
 

@@ -45,6 +45,8 @@ def _iter_asset_fields(data: dict):
         yield tr, "path"
     for cg in data.get("cg", []):
         yield cg, "image"
+    for it in data.get("items", []):
+        yield it, "image"
     # テーマ（コンポーネント画像）
     theme = data.get("theme")
     if isinstance(theme, dict):

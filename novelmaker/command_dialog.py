@@ -256,10 +256,19 @@ class CommandDialog(QDialog):
         self.item_cb = _combo([(it["id"], f'{it.get("icon","")} {it["name"]}')
                                for it in self.project.items],
                               self.cmd.get("itemId", ""), none_label="（アイテムを選択）")
-        self.action_cb = _combo([("add", "入手する"), ("remove", "失う/破棄する")],
+        self.action_cb = _combo([("add", "入手する"),
+                                 ("use", "使用する（消費）"),
+                                 ("remove", "失う/破棄する")],
                                 self.cmd.get("action", "add"))
+        self.notify_cb = QCheckBox("入手/使用メッセージを表示する（アイコン＋説明）")
+        self.notify_cb.setChecked(bool(self.cmd.get("notify", True)))
         f.addRow("アイテム:", self.item_cb)
         f.addRow("動作:", self.action_cb)
+        f.addRow("", self.notify_cb)
+        hint = QLabel("※「使用」は所持している場合に消費します。\n"
+                      "　メッセージはアイテムのアイコン（絵文字/画像）と説明を表示します。")
+        hint.setStyleSheet("color:#888;")
+        f.addRow("", hint)
         self._add_form(f)
 
     def _form_jump(self):
@@ -398,6 +407,7 @@ class CommandDialog(QDialog):
         elif t == "item":
             self.cmd["itemId"] = self.item_cb.currentData() or ""
             self.cmd["action"] = self.action_cb.currentData()
+            self.cmd["notify"] = self.notify_cb.isChecked()
         elif t == "jump":
             self.cmd["targetScene"] = self.scene_cb.currentData() or ""
         elif t == "ending":

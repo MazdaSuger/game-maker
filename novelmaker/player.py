@@ -221,6 +221,32 @@ class PlayerWidget(QWidget):
         el.addWidget(end_btn)
         self.ending_overlay.hide()
 
+        # アイテム入手/使用オーバーレイ
+        self.itemget_overlay = self._make_overlay()
+        gl = self.itemget_overlay.box_layout
+        self.itemget_verb = QLabel("", self.itemget_overlay)
+        self.itemget_verb.setObjectName("overlayTitle")
+        self.itemget_verb.setAlignment(Qt.AlignCenter)
+        self.itemget_icon = QLabel("", self.itemget_overlay)
+        self.itemget_icon.setAlignment(Qt.AlignCenter)
+        self.itemget_icon.setMinimumHeight(96)
+        self.itemget_name = QLabel("", self.itemget_overlay)
+        self.itemget_name.setObjectName("itemGetName")
+        self.itemget_name.setAlignment(Qt.AlignCenter)
+        self.itemget_name.setWordWrap(True)
+        self.itemget_desc = QLabel("", self.itemget_overlay)
+        self.itemget_desc.setAlignment(Qt.AlignCenter)
+        self.itemget_desc.setWordWrap(True)
+        ig_btn = QPushButton("OK", self.itemget_overlay)
+        ig_btn.setObjectName("primary")
+        ig_btn.clicked.connect(self._close_itemget)
+        gl.addWidget(self.itemget_verb)
+        gl.addWidget(self.itemget_icon)
+        gl.addWidget(self.itemget_name)
+        gl.addWidget(self.itemget_desc)
+        gl.addWidget(ig_btn)
+        self.itemget_overlay.hide()
+
         # タイトル画面オーバーレイ（はじめから / つづきから）
         self.title_overlay = QFrame(self)
         self.title_overlay.setObjectName("titleOverlay")
@@ -378,8 +404,8 @@ class PlayerWidget(QWidget):
         self.exited.emit()
 
     def _hide_all_overlays(self):
-        for ov in (self.name_overlay, self.items_overlay,
-                   self.save_overlay, self.ending_overlay, self.title_overlay):
+        for ov in (self.name_overlay, self.items_overlay, self.save_overlay,
+                   self.ending_overlay, self.title_overlay, self.itemget_overlay):
             ov.hide()
 
     # ------------------------------------------------------------------
@@ -428,6 +454,9 @@ class PlayerWidget(QWidget):
             self.name_overlay.show()
             self._raise_overlays()
             self.name_field.setFocus()
+
+        elif kind == "itemGet":
+            self._show_itemget(ev)
 
         elif kind == "ending":
             self._show_ending(ev)
@@ -543,6 +572,31 @@ class PlayerWidget(QWidget):
         text = self.name_field.text().strip() or "名無し"
         self.name_overlay.hide()
         self._present(self.runtime.advance(text))
+
+    # --- アイテム入手/使用 ---
+    def _show_itemget(self, ev: dict):
+        verb = ev.get("verb", "get")
+        name = ev.get("name", "")
+        self.itemget_verb.setText(
+            f'「{name}」を使った' if verb == "use" else f'「{name}」を手に入れた')
+        # アイコン（画像優先、なければ絵文字）
+        img = ev.get("image", "")
+        pix = self._pixmap(img) if img else None
+        if pix is not None:
+            self.itemget_icon.setPixmap(
+                pix.scaled(112, 112, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        else:
+            self.itemget_icon.setPixmap(QPixmap())
+            self.itemget_icon.setText(ev.get("icon", "📦"))
+            self.itemget_icon.setStyleSheet("font-size: 64px;")
+        self.itemget_name.setText(name)
+        self.itemget_desc.setText(ev.get("desc", ""))
+        self.itemget_overlay.show()
+        self._raise_overlays()
+
+    def _close_itemget(self):
+        self.itemget_overlay.hide()
+        self._present(self.runtime.advance())
 
     # --- エンディング ---
     def _show_ending(self, ev: dict):
@@ -823,10 +877,19 @@ class PlayerWidget(QWidget):
             row = QFrame()
             row.setObjectName("itemRow")
             rl = QHBoxLayout(row)
-            icon = QLabel(item.get("icon", "📦"))
-            icon.setStyleSheet("font-size:22px;")
+            icon = QLabel()
+            pix = self._pixmap(item.get("image", "")) if item.get("image") else None
+            if pix is not None:
+                icon.setPixmap(pix.scaled(48, 48, Qt.KeepAspectRatio,
+                                          Qt.SmoothTransformation))
+            else:
+                icon.setText(item.get("icon", "📦"))
+                icon.setStyleSheet("font-size:28px;")
+            icon.setFixedWidth(52)
+            icon.setAlignment(Qt.AlignCenter)
+            desc_html = (item.get("desc", "") or "").replace("\n", "<br>")
             name = QLabel(f'<b>{item["name"]}</b><br><span style="color:#bbb">'
-                          f'{item.get("desc","")}</span>')
+                          f'{desc_html}</span>')
             name.setWordWrap(True)
             rl.addWidget(icon)
             rl.addWidget(name, 1)
@@ -941,12 +1004,13 @@ class PlayerWidget(QWidget):
                                       px(c["y"], h) - chh // 2, cw, chh)
         # オーバーレイ：全面
         for ov in (self.name_overlay, self.items_overlay, self.save_overlay,
-                   self.ending_overlay, self.title_overlay, self.endroll_overlay):
+                   self.ending_overlay, self.title_overlay, self.endroll_overlay,
+                   self.itemget_overlay):
             ov.setGeometry(0, 0, w, h)
 
     def _raise_overlays(self):
-        for ov in (self.name_overlay, self.items_overlay,
-                   self.save_overlay, self.ending_overlay, self.title_overlay):
+        for ov in (self.name_overlay, self.items_overlay, self.save_overlay,
+                   self.ending_overlay, self.title_overlay, self.itemget_overlay):
             if ov.isVisible():
                 ov.raise_()
 
@@ -954,9 +1018,11 @@ class PlayerWidget(QWidget):
         if event.key() in (Qt.Key_Space, Qt.Key_Return, Qt.Key_Enter):
             if self.endroll_overlay.isVisible():
                 self._skip_endroll()
+            elif self.itemget_overlay.isVisible():
+                self._close_itemget()
             elif not self._title_mode and not any(ov.isVisible() for ov in
-                       (self.name_overlay, self.items_overlay,
-                        self.save_overlay, self.ending_overlay, self.title_overlay)):
+                       (self.name_overlay, self.items_overlay, self.save_overlay,
+                        self.ending_overlay, self.title_overlay, self.itemget_overlay)):
                 self._on_advance_click()
         super().keyPressEvent(event)
 
@@ -1062,6 +1128,7 @@ PlayerWidget { background:#000; }
 #overlayTitle { font-size: 20px; font-weight: bold; color:#dfe6ff; }
 #endingBadge { font-size: 22px; font-weight: bold; letter-spacing: 3px; }
 #endingName { font-size: 28px; font-weight: bold; color:#fff; }
+#itemGetName { font-size: 22px; font-weight: bold; color:#ffe9a8; }
 #slotRow, #itemRow {
     background: rgba(255,255,255,0.05);
     border: 1px solid rgba(150,170,230,0.25);

@@ -158,7 +158,7 @@ def new_command(ctype: str) -> dict:
     elif ctype == "gauge":
         base.update(gaugeId="", op="add", value="1")
     elif ctype == "item":
-        base.update(itemId="", action="add")  # add / remove
+        base.update(itemId="", action="add", notify=True)  # add / remove / use
     elif ctype == "choice":
         base.update(prompt="", options=[
             {"id": uid("opt"), "text": "選択肢1", "targetScene": "",
@@ -351,7 +351,8 @@ def default_project() -> dict:
             ]},
         ],
         "items": [
-            {"id": it_key, "name": "古い鍵", "desc": "何かを開けられそうだ", "icon": "🔑"},
+            {"id": it_key, "name": "古い鍵", "desc": "何かを開けられそうだ。\nどこかの扉を開けるのに使えるかもしれない。",
+             "icon": "🔑", "image": ""},
         ],
         "backgrounds": [
             {"id": bg_room, "name": "部屋", "image": "", "color": "#3a4a6b"},
@@ -504,7 +505,7 @@ def describe_command(cmd: dict, project: "Project") -> str:
         return f"ゲージ「{g['name'] if g else '?'}」 {op_map.get(cmd.get('op'),'')} {cmd.get('value','')}"
     if t == "item":
         it = project.item(cmd.get("itemId", ""))
-        act = "入手" if cmd.get("action") == "add" else "破棄"
+        act = {"add": "入手", "remove": "破棄", "use": "使用"}.get(cmd.get("action"), "?")
         return f"アイテム {act} → {it['name'] if it else '（未設定）'}"
     if t == "choice":
         opts = cmd.get("options", [])
