@@ -389,9 +389,10 @@ class Runtime:
                     self.state.items.remove(iid)
                 return None
             if action == "use":
-                # 使用＝所持していれば消費する
+                # 使用＝所持していれば（消費するアイテムなら）取り除く
                 if iid in self.state.items:
-                    self.state.items.remove(iid)
+                    if item is None or item.get("consumable", True):
+                        self.state.items.remove(iid)
                     if notify and item:
                         return self._item_event(item, "use")
                 return None

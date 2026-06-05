@@ -337,7 +337,7 @@ class ItemEditor(ListEditor):
 
     def default_entry(self):
         return {"id": uid("item"), "name": f"アイテム{len(self.entries())+1}",
-                "desc": "", "icon": "📦", "image": ""}
+                "desc": "", "icon": "📦", "image": "", "consumable": True}
 
     def label_for(self, e):
         mark = "🖼" if e.get("image") else e.get("icon", "")
@@ -357,11 +357,17 @@ class ItemEditor(ListEditor):
         desc.setMinimumHeight(80)
         desc.textChanged.connect(
             lambda: (e.__setitem__("desc", desc.toPlainText()), self.touch()))
+        consumable = QCheckBox("「使用」したら消費する（なくなる）")
+        consumable.setChecked(bool(e.get("consumable", True)))
+        consumable.toggled.connect(
+            lambda v: (e.__setitem__("consumable", v), self.touch()))
         f.addRow("名前:", name)
         f.addRow("アイコン(絵文字):", icon)
         f.addRow("アイコン画像(PNG等):", image)
         f.addRow("説明:", desc)
-        hint = QLabel("※ 画像を設定すると、絵文字より優先して表示されます。")
+        f.addRow("", consumable)
+        hint = QLabel("※ 画像を設定すると、絵文字より優先して表示されます。\n"
+                      "　鍵など繰り返し使うアイテムは、このチェックを外してください。")
         hint.setStyleSheet("color:#888;")
         f.addRow("", hint)
         host = QWidget(); host.setLayout(f)

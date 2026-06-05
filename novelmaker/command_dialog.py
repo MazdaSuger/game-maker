@@ -265,7 +265,7 @@ class CommandDialog(QDialog):
         f.addRow("アイテム:", self.item_cb)
         f.addRow("動作:", self.action_cb)
         f.addRow("", self.notify_cb)
-        hint = QLabel("※「使用」は所持している場合に消費します。\n"
+        hint = QLabel("※「使用」で消費するかは、アイテム側の設定（使用したら消費する）に従います。\n"
                       "　メッセージはアイテムのアイコン（絵文字/画像）と説明を表示します。")
         hint.setStyleSheet("color:#888;")
         f.addRow("", hint)

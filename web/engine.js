@@ -297,7 +297,8 @@
       }
       if (action === "use") {
         if (st.items.includes(iid)) {
-          st.items = st.items.filter((x) => x !== iid);
+          const consumable = item ? (item.consumable !== false) : true;
+          if (consumable) st.items = st.items.filter((x) => x !== iid);
           if (notify && item) return itemEvent(item, "use");
         }
         return null;

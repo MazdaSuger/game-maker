@@ -351,8 +351,9 @@ def default_project() -> dict:
             ]},
         ],
         "items": [
-            {"id": it_key, "name": "古い鍵", "desc": "何かを開けられそうだ。\nどこかの扉を開けるのに使えるかもしれない。",
-             "icon": "🔑", "image": ""},
+            {"id": it_key, "name": "古い鍵",
+             "desc": "何かを開けられそうだ。\nどこかの扉を開けるのに使えるかもしれない。",
+             "icon": "🔑", "image": "", "consumable": False},
         ],
         "backgrounds": [
             {"id": bg_room, "name": "部屋", "image": "", "color": "#3a4a6b"},
