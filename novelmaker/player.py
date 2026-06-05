@@ -735,6 +735,10 @@ class PlayerWidget(QWidget):
         if not ch.get("showSprite", True):
             return
         ex = self.project.expression(st.char_id, st.expr_id)
+        if ex is None:
+            # 表情未指定/不明なら最初の表情を使う
+            exprs = ch.get("expressions", [])
+            ex = exprs[0] if exprs else None
         pix = self._pixmap(ex.get("image", "")) if ex else None
         sp = merged_layout(self.project)["sprite"]
         avail_h = int(rect.height() * (sp.get("scale", 80) / 100.0))

@@ -134,7 +134,7 @@ def new_command(ctype: str) -> dict:
     """指定タイプのコマンド初期値を返す。"""
     base = {"id": uid("cmd"), "type": ctype}
     if ctype == "say":
-        base.update(charId="", exprId=NO_SPRITE, text="")  # 既定は立ち絵表示なし
+        base.update(charId="", exprId="", text="")  # 既定はキャラの最初の表情で立ち絵表示
     elif ctype == "narrate":
         base.update(text="")
     elif ctype == "charExit":

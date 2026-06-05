@@ -179,7 +179,8 @@
     elChar.innerHTML = "";
     if (!st.blackout && st.char_id) {
       const ch = chars[st.char_id];
-      const ex = ch && (ch.expressions || []).find((e) => e.id === st.expr_id);
+      let ex = ch && (ch.expressions || []).find((e) => e.id === st.expr_id);
+      if (ch && !ex && (ch.expressions || []).length) ex = ch.expressions[0];
       if (ex && ex.image) {
         const img = document.createElement("img");
         img.src = ex.image; elChar.appendChild(img);

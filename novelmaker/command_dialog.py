@@ -115,12 +115,20 @@ class CommandDialog(QDialog):
         cid = self.char_cb.currentData()
         ch = self.project.character(cid)
         self.expr_cb.clear()
-        # 既定の差分候補として「立ち絵表示なし」を先頭に追加
+        # 「立ち絵表示なし」を候補に加える（既定では選ばない）
         self.expr_cb.addItem("（立ち絵表示なし）", NO_SPRITE)
-        if ch:
-            for e in ch.get("expressions", []):
-                self.expr_cb.addItem(e["name"], e["id"])
-        set_combo_value(self.expr_cb, self.cmd.get("exprId", NO_SPRITE))
+        exprs = ch.get("expressions", []) if ch else []
+        for e in exprs:
+            self.expr_cb.addItem(e["name"], e["id"])
+        want = self.cmd.get("exprId", "")
+        ids = [e["id"] for e in exprs]
+        if want == NO_SPRITE or not exprs:
+            set_combo_value(self.expr_cb, NO_SPRITE)
+        elif want in ids:
+            set_combo_value(self.expr_cb, want)
+        else:
+            # 未設定/不明なら最初の表情を選ぶ（立ち絵を表示）
+            self.expr_cb.setCurrentIndex(1)
 
     def _form_charExit(self):
         f = QFormLayout()
