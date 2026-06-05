@@ -134,7 +134,8 @@ def new_command(ctype: str) -> dict:
     """指定タイプのコマンド初期値を返す。"""
     base = {"id": uid("cmd"), "type": ctype}
     if ctype == "say":
-        base.update(charId="", exprId="", text="")  # 既定はキャラの最初の表情で立ち絵表示
+        # 既定はキャラの最初の表情で立ち絵表示。hideSprite で個別に非表示も可。
+        base.update(charId="", exprId="", text="", hideSprite=False)
     elif ctype == "narrate":
         base.update(text="")
     elif ctype == "charExit":
@@ -175,6 +176,22 @@ def new_command(ctype: str) -> dict:
     return base
 
 
+def migrate_project(data: dict) -> dict:
+    """旧バージョンのデータを現行仕様に補正する。
+
+    - セリフの「立ち絵表示なし」を表情ID(``__none__``)に埋め込んでいた旧仕様を、
+      表情=空（最初の表情で表示）＋ ``hideSprite`` 方式へ移行する。
+      これにより「立ち絵を表示する」にしたのに出ない不具合を解消する。
+    """
+    for scene in data.get("scenes", []):
+        for cmd in scene.get("commands", []):
+            if cmd.get("type") == "say":
+                if cmd.get("exprId") == NO_SPRITE:
+                    cmd["exprId"] = ""          # 立ち絵を表示する側に倒す
+                cmd.setdefault("hideSprite", False)
+    return data
+
+
 # ---------------------------------------------------------------------------
 # Project ラッパー
 # ---------------------------------------------------------------------------
@@ -183,6 +200,7 @@ class Project:
 
     def __init__(self, data: Optional[dict] = None):
         self.data: dict = data if data is not None else default_project()
+        migrate_project(self.data)       # 旧データの補正
         self.path: Optional[str] = None  # 保存先ファイルパス
         self.dirty: bool = False         # 未保存の変更があるか
 

@@ -239,9 +239,9 @@
     if (t === "say") {
       const ch = this.character(cmd.charId);
       const exprId = cmd.exprId || "";
-      // showSprite=false（主人公など）や「立ち絵表示なし」は直前の立ち絵を維持
+      // showSprite=false（主人公など）や hideSprite=true は直前の立ち絵を維持
       let show = ch ? (ch.showSprite !== false) : false;
-      if (exprId === NO_SPRITE) show = false;
+      if (cmd.hideSprite) show = false;
       if (show) {
         st.char_id = cmd.charId || "";
         st.expr_id = exprId;

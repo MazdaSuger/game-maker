@@ -300,12 +300,12 @@ class Runtime:
         if t == "say":
             ch = self.project.character(cmd.get("charId", ""))
             expr_id = cmd.get("exprId", "")
-            # 立ち絵を表示するキャラのみ、表示中の立ち絵を切り替える。
-            # ・showSprite=False のキャラ（主人公など）
-            # ・表情が「立ち絵表示なし」(NO_SPRITE)
+            # 立ち絵を表示する場合のみ表示中の立ち絵を切り替える。
+            # ・キャラの showSprite=False（主人公など）
+            # ・このセリフの hideSprite=True（このセリフだけ立ち絵を出さない）
             # の場合は直前の立ち絵を維持する。
             show = bool(ch.get("showSprite", True)) if ch else False
-            if expr_id == NO_SPRITE:
+            if cmd.get("hideSprite", False):
                 show = False
             if show:
                 self.state.char_id = cmd.get("charId", "")

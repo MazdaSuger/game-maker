@@ -104,9 +104,16 @@ class CommandDialog(QDialog):
         self.text_edit = QPlainTextEdit(self.cmd.get("text", ""))
         self.text_edit.setPlaceholderText("セリフ本文。{変数名} で変数を埋め込めます。")
         self.text_edit.setMinimumHeight(100)
+        self.hide_sprite_cb = QCheckBox("このセリフでは立ち絵を表示しない（名前だけ）")
+        self.hide_sprite_cb.setChecked(bool(self.cmd.get("hideSprite", False)))
         f.addRow("キャラ:", self.char_cb)
         f.addRow("表情:", self.expr_cb)
         f.addRow("セリフ:", self.text_edit)
+        f.addRow("", self.hide_sprite_cb)
+        hint = QLabel("※ 立ち絵が出ない場合は、キャラ側「立ち絵を表示する」がONか、\n"
+                      "　上のチェックが外れているかを確認してください。")
+        hint.setStyleSheet("color:#888;")
+        f.addRow("", hint)
         self._add_form(f)
 
     def _reload_expr(self):
@@ -115,20 +122,17 @@ class CommandDialog(QDialog):
         cid = self.char_cb.currentData()
         ch = self.project.character(cid)
         self.expr_cb.clear()
-        # 「立ち絵表示なし」を候補に加える（既定では選ばない）
-        self.expr_cb.addItem("（立ち絵表示なし）", NO_SPRITE)
         exprs = ch.get("expressions", []) if ch else []
         for e in exprs:
             self.expr_cb.addItem(e["name"], e["id"])
         want = self.cmd.get("exprId", "")
         ids = [e["id"] for e in exprs]
-        if want == NO_SPRITE or not exprs:
-            set_combo_value(self.expr_cb, NO_SPRITE)
-        elif want in ids:
+        if not exprs:
+            return
+        if want in ids:
             set_combo_value(self.expr_cb, want)
         else:
-            # 未設定/不明なら最初の表情を選ぶ（立ち絵を表示）
-            self.expr_cb.setCurrentIndex(1)
+            self.expr_cb.setCurrentIndex(0)  # 最初の表情
 
     def _form_charExit(self):
         f = QFormLayout()
@@ -380,6 +384,7 @@ class CommandDialog(QDialog):
             self.cmd["charId"] = self.char_cb.currentData() or ""
             self.cmd["exprId"] = self.expr_cb.currentData() or ""
             self.cmd["text"] = self.text_edit.toPlainText()
+            self.cmd["hideSprite"] = self.hide_sprite_cb.isChecked()
         elif t == "narrate":
             self.cmd["text"] = self.text_edit.toPlainText()
         elif t == "charExit":
