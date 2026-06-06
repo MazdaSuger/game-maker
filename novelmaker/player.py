@@ -412,6 +412,10 @@ class PlayerWidget(QWidget):
     # ------------------------------------------------------------------
     # イベント提示
     # ------------------------------------------------------------------
+    def _comp_hidden(self, key: str) -> bool:
+        """レイアウトで「非表示」指定されたコンポーネントか。"""
+        return bool(merged_layout(self.project).get(key, {}).get("hidden", False))
+
     def _present(self, ev: dict):
         self._current_event = ev
         self._update_stage()
@@ -425,14 +429,14 @@ class PlayerWidget(QWidget):
             self._endroll_timer.stop()
             self.endroll_overlay.hide()
             if not self._title_mode:
-                self.items_btn.show()
-                self.menu_frame.show()
+                self.items_btn.setVisible(not self._comp_hidden("items"))
+                self.menu_frame.setVisible(not self._comp_hidden("menu"))
 
         if kind == "endroll":
             self._start_endroll(ev.get("text", ""), ev.get("speed", 60))
 
         elif kind in ("say", "narrate"):
-            self.msg_frame.show()
+            self.msg_frame.setVisible(not self._comp_hidden("message"))
             if kind == "say":
                 self.name_label.setText(ev.get("name", ""))
                 self.name_label.setStyleSheet(
@@ -443,7 +447,7 @@ class PlayerWidget(QWidget):
             self._start_typewriter(ev.get("text", ""))
 
         elif kind == "choice":
-            self.msg_frame.setVisible(bool(ev.get("prompt")))
+            self.msg_frame.setVisible(bool(ev.get("prompt")) and not self._comp_hidden("message"))
             if ev.get("prompt"):
                 self.name_label.setVisible(False)
                 self._start_typewriter(ev.get("prompt", ""))
@@ -463,7 +467,7 @@ class PlayerWidget(QWidget):
             self._show_ending(ev)
 
         elif kind == "end":
-            self.msg_frame.show()
+            self.msg_frame.setVisible(not self._comp_hidden("message"))
             self.name_label.setVisible(False)
             self._start_typewriter("― おわり ―")
 
@@ -638,7 +642,8 @@ class PlayerWidget(QWidget):
             val = st.gauges.get(g["id"], g.get("initial", 0))
             row = _GaugeBar(g, val, self.gauge_panel)
             self.gauge_layout.addWidget(row)
-        self.gauge_panel.setVisible(shown)
+        self.gauge_panel.setVisible(shown and not self._comp_hidden("gauges")
+                                    and not self._title_mode)
 
     def _pixmap(self, path: str):
         if not path:
@@ -697,8 +702,9 @@ class PlayerWidget(QWidget):
         if not drew_bg:
             p.fillRect(rect, QColor("#101018"))
 
-        # 立ち絵（暗転中・CG表示中は描かない）
-        if not st.blackout and not st.cg_id and st.char_id:
+        # 立ち絵（暗転中・CG表示中・非表示指定中は描かない）
+        if (not st.blackout and not st.cg_id and st.char_id
+                and not self._comp_hidden("sprite")):
             self._paint_character(p, rect, st)
 
         # CG（画面全体・背景と立ち絵の上）
@@ -1018,8 +1024,9 @@ class PlayerWidget(QWidget):
             ov.setGeometry(0, 0, w, h)
 
     def _raise_overlays(self):
-        for ov in (self.name_overlay, self.items_overlay, self.save_overlay,
-                   self.ending_overlay, self.title_overlay, self.itemget_overlay):
+        # タイトルを先に上げ、モーダル（ロード等）を最後に上げて最前面にする
+        for ov in (self.title_overlay, self.name_overlay, self.items_overlay,
+                   self.save_overlay, self.ending_overlay, self.itemget_overlay):
             if ov.isVisible():
                 ov.raise_()
 
@@ -1034,6 +1041,17 @@ class PlayerWidget(QWidget):
                         self.ending_overlay, self.title_overlay, self.itemget_overlay)):
                 self._on_advance_click()
         super().keyPressEvent(event)
+
+    def mousePressEvent(self, event):
+        # ステージ（メッセージ枠以外）クリックでも進められる。
+        # セリフ枠を非表示にした場合の進行手段にもなる。
+        if self.endroll_overlay.isVisible():
+            self._skip_endroll()
+        elif not self._title_mode and not any(ov.isVisible() for ov in
+                (self.name_overlay, self.items_overlay, self.save_overlay,
+                 self.ending_overlay, self.title_overlay, self.itemget_overlay)):
+            self._on_advance_click()
+        super().mousePressEvent(event)
 
 
 # ---------------------------------------------------------------------------

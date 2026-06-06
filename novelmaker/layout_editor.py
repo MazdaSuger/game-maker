@@ -127,6 +127,22 @@ class LayoutEditor(QWidget):
                       "　ボタンの背景に引き伸ばして表示されます（プレイ画面に反映）。")
         hint.setStyleSheet("color:#888;")
         right.addWidget(hint)
+
+        # 非表示にするコンポーネント
+        hbox = QGroupBox("コンポーネントの非表示")
+        hl = QVBoxLayout(hbox)
+        hl.addWidget(QLabel("チェックを入れたコンポーネントはプレイ画面で消えます。"))
+        self.project.data.setdefault("layout", {})
+        from PySide6.QtWidgets import QCheckBox
+        for elem_id, label, kind in LAYOUT_ELEMENTS:
+            if elem_id == "choices":
+                continue  # 選択肢は非表示にすると進行不能になるため対象外
+            cb = QCheckBox(label)
+            cur = self.project.data["layout"].get(elem_id, {})
+            cb.setChecked(bool(cur.get("hidden", False)))
+            cb.toggled.connect(lambda v, k=elem_id: self._set_hidden(k, v))
+            hl.addWidget(cb)
+        right.addWidget(hbox)
         right.addStretch()
         rw = QWidget(); rw.setLayout(right)
         rw.setMaximumWidth(380)
@@ -144,7 +160,8 @@ class LayoutEditor(QWidget):
             handle = _Handle(elem_id, label, kind, color, (w, hgt),
                              self._on_handle_move, self.canvas)
             self.handles[elem_id] = handle
-            handle.show()
+            hidden = self.project.data.get("layout", {}).get(elem_id, {}).get("hidden", False)
+            handle.setVisible(not hidden)
         self._position_handles_from_layout()
 
     def _position_handles_from_layout(self):
@@ -182,6 +199,16 @@ class LayoutEditor(QWidget):
 
     def _set_theme(self, key: str, path: str):
         self.project.data.setdefault("theme", {})[key] = path
+        self.project.dirty = True
+        self.changed.emit()
+
+    def _set_hidden(self, elem_id: str, hidden: bool):
+        d = self.project.data.setdefault("layout", {}).setdefault(elem_id, {})
+        d["hidden"] = hidden
+        # プレビュー上のハンドルを薄く表示
+        h = self.handles.get(elem_id)
+        if h is not None:
+            h.setVisible(not hidden)
         self.project.dirty = True
         self.changed.emit()
 

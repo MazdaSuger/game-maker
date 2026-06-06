@@ -51,14 +51,17 @@
     elChoices.style.display = "none";
     if (ev.kind !== "endroll") {      // エンドロール解除・UI復帰
       stopEndroll();
-      if (!titleMode) { $("items-btn").style.display = ""; $("menu").style.display = "flex"; }
+      if (!titleMode) {
+        $("items-btn").style.display = compHidden("items") ? "none" : "";
+        $("menu").style.display = compHidden("menu") ? "none" : "flex";
+      }
     }
     if (ev.kind === "endroll") { startEndroll(ev.text || "", ev.speed || 60); return; }
     hideOverlay("ov-name"); // 入力以外では閉じる前提
 
     const k = ev.kind;
     if (k === "say" || k === "narrate") {
-      elMsgWin.style.display = "";
+      elMsgWin.style.display = compHidden("message") ? "none" : "";
       if (k === "say") {
         elName.textContent = ev.name || "";
         elName.style.color = ev.color || "#fff";
@@ -70,7 +73,7 @@
       typewrite(ev.text || "");
     } else if (k === "choice") {
       if (ev.prompt) {
-        elMsgWin.style.display = "";
+        elMsgWin.style.display = compHidden("message") ? "none" : "";
         elName.style.visibility = "hidden";
         typewrite(ev.prompt);
       } else {
@@ -87,7 +90,7 @@
     } else if (k === "ending") {
       showEnding(ev);
     } else if (k === "end") {
-      elMsgWin.style.display = "";
+      elMsgWin.style.display = compHidden("message") ? "none" : "";
       elName.style.visibility = "hidden";
       typewrite("― おわり ―");
     }
@@ -124,13 +127,13 @@
     (ev.options || []).forEach((opt) => {
       const b = document.createElement("button");
       b.className = "choice-btn"; b.textContent = opt.text;
-      b.onclick = () => { elChoices.style.display = "none"; present(rt.choose(opt.index)); };
+      b.onclick = (e) => { e.stopPropagation(); elChoices.style.display = "none"; present(rt.choose(opt.index)); };
       elChoices.appendChild(b);
     });
     if (!ev.options.length) {
       const b = document.createElement("button");
       b.className = "choice-btn"; b.textContent = "続ける";
-      b.onclick = () => present(rt.choose(-1));
+      b.onclick = (e) => { e.stopPropagation(); present(rt.choose(-1)); };
       elChoices.appendChild(b);
     }
     elChoices.style.display = "flex";
@@ -189,7 +192,7 @@
 
     // 立ち絵
     elChar.innerHTML = "";
-    if (!st.blackout && st.char_id) {
+    if (!st.blackout && st.char_id && !compHidden("sprite")) {
       const ch = chars[st.char_id];
       let ex = ch && (ch.expressions || []).find((e) => e.id === st.expr_id);
       if (ch && !ex && (ch.expressions || []).length) ex = ch.expressions[0];
@@ -286,7 +289,7 @@
         `<div class="gauge-track"><div class="gauge-fill" style="width:${ratio * 100}%;background:${g.color || "#4cc2ff"}"></div></div>`;
       elGauges.appendChild(wrap);
     });
-    elGauges.style.display = shownAny ? "" : "none";
+    elGauges.style.display = (shownAny && !compHidden("gauges")) ? "" : "none";
   }
 
   // ---------------- BGM（フェード対応） ----------------
@@ -435,7 +438,13 @@
   }
 
   // ---------------- イベント結線 ----------------
-  elMsgWin.addEventListener("click", onAdvance);
+  elMsgWin.addEventListener("click", (e) => { e.stopPropagation(); onAdvance(); });
+  // セリフ枠を非表示にした場合、ステージのクリックで進められる
+  $("stage").addEventListener("click", () => {
+    if (titleMode || !compHidden("message")) return;
+    if (!$("endroll").classList.contains("hidden")) { skipEndroll(); return; }
+    if (!anyOverlayOpen()) onAdvance();
+  });
   $("endroll").addEventListener("click", skipEndroll);
   document.addEventListener("keydown", (e) => {
     if (e.key === " " || e.key === "Enter") {
@@ -501,10 +510,9 @@
   }
 
   function setGameChrome(visible) {
-    const disp = visible ? "" : "none";
-    elMsgWin.style.display = disp;
-    $("items-btn").style.display = disp;
-    $("menu").style.display = visible ? "flex" : "none";
+    elMsgWin.style.display = (visible && !compHidden("message")) ? "" : "none";
+    $("items-btn").style.display = (visible && !compHidden("items")) ? "" : "none";
+    $("menu").style.display = (visible && !compHidden("menu")) ? "flex" : "none";
     if (!visible) { elChoices.style.display = "none"; elGauges.style.display = "none"; }
   }
 
@@ -535,6 +543,8 @@
     const L = DATA.layout || {};
     return Object.assign({}, DEFAULT_LAYOUT[key], L[key] || {});
   }
+
+  function compHidden(key) { return !!layoutOf(key).hidden; }
 
   function applyLayout() {
     const m = layoutOf("message");
