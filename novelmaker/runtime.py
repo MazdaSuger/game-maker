@@ -151,9 +151,10 @@ class GameState:
         # 表示状態
         self.bg_id: str = ""
         self.blackout: bool = False
+        self.blackout_hide_ui: bool = False   # 暗転時にUIも消すか
         self.cg_id: str = ""                  # 表示中のCG（""=なし）
-        self.char_id: str = ""                # 現在表示中のキャラ
-        self.expr_id: str = ""
+        # 立ち絵：最大3人（{"left":{"charId","exprId"}, ...}）
+        self.sprites: dict[str, dict] = {}
         self.bgm_id: str = ""                 # 再生中BGM
         self.bgm_fade: int = 0                # 直近のBGM切替フェード(ms)
         self.discovered_endings: list[str] = []  # 到達済みエンディング
@@ -168,9 +169,9 @@ class GameState:
             "cmd_index": self.cmd_index,
             "bg_id": self.bg_id,
             "blackout": self.blackout,
+            "blackout_hide_ui": self.blackout_hide_ui,
             "cg_id": self.cg_id,
-            "char_id": self.char_id,
-            "expr_id": self.expr_id,
+            "sprites": self.sprites,
             "bgm_id": self.bgm_id,
             "bgm_fade": self.bgm_fade,
             "discovered_endings": self.discovered_endings,
@@ -186,9 +187,14 @@ class GameState:
         s.cmd_index = d.get("cmd_index", 0)
         s.bg_id = d.get("bg_id", "")
         s.blackout = d.get("blackout", False)
+        s.blackout_hide_ui = d.get("blackout_hide_ui", False)
         s.cg_id = d.get("cg_id", "")
-        s.char_id = d.get("char_id", "")
-        s.expr_id = d.get("expr_id", "")
+        # 立ち絵：新形式 sprites、無ければ旧 char_id/expr_id から移行
+        if "sprites" in d and isinstance(d["sprites"], dict):
+            s.sprites = {k: dict(v) for k, v in d["sprites"].items()}
+        elif d.get("char_id"):
+            s.sprites = {"center": {"charId": d.get("char_id", ""),
+                                    "exprId": d.get("expr_id", "")}}
         s.bgm_id = d.get("bgm_id", "")
         s.bgm_fade = d.get("bgm_fade", 0)
         s.discovered_endings = list(d.get("discovered_endings", []))
@@ -344,25 +350,28 @@ class Runtime:
         t = cmd.get("type")
 
         if t == "say":
-            ch = self.project.character(cmd.get("charId", ""))
+            cid = cmd.get("charId", "")
+            ch = self.project.character(cid)
             expr_id = cmd.get("exprId", "")
-            # 立ち絵を表示する場合のみ表示中の立ち絵を切り替える。
-            # ・キャラの showSprite=False（主人公など）
-            # ・このセリフの hideSprite=True（このセリフだけ立ち絵を出さない）
-            # の場合は直前の立ち絵を維持する。
+            pos = cmd.get("pos", "center")
+            if pos not in ("left", "center", "right"):
+                pos = "center"
+            # 立ち絵を配置する条件：showSprite かつ hideSprite でない
             show = bool(ch.get("showSprite", True)) if ch else False
             if cmd.get("hideSprite", False):
                 show = False
-            if show:
-                self.state.char_id = cmd.get("charId", "")
-                self.state.expr_id = expr_id
+            if show and cid:
+                # 同一キャラは1スロットだけに（他スロットから取り除く）
+                for p in list(self.state.sprites.keys()):
+                    if self.state.sprites[p].get("charId") == cid and p != pos:
+                        del self.state.sprites[p]
+                self.state.sprites[pos] = {"charId": cid, "exprId": expr_id}
             return {
                 "kind": "say",
                 "name": ch["name"] if ch else "",
                 "color": ch.get("color", "#ffffff") if ch else "#ffffff",
                 "text": self._interp(cmd.get("text", "")),
-                "charId": self.state.char_id,
-                "exprId": self.state.expr_id,
+                "speaker": cid,
             }
 
         if t == "narrate":
@@ -370,10 +379,12 @@ class Runtime:
 
         if t == "charExit":
             target = cmd.get("charId", "")
-            # 対象未指定、または表示中のキャラが対象なら立ち絵を消す
-            if not target or self.state.char_id == target:
-                self.state.char_id = ""
-                self.state.expr_id = ""
+            if not target:
+                self.state.sprites = {}        # 全員退場
+            else:
+                for p in list(self.state.sprites.keys()):
+                    if self.state.sprites[p].get("charId") == target:
+                        del self.state.sprites[p]
             return None
 
         if t == "bg":
@@ -381,7 +392,9 @@ class Runtime:
             return None
 
         if t == "blackout":
-            self.state.blackout = (cmd.get("mode", "on") == "on")
+            on = (cmd.get("mode", "on") == "on")
+            self.state.blackout = on
+            self.state.blackout_hide_ui = on and bool(cmd.get("hideUi", False))
             return None
 
         if t == "bgm":
@@ -395,7 +408,8 @@ class Runtime:
         if t == "endroll":
             return {"kind": "endroll",
                     "text": self._interp(cmd.get("text", "")),
-                    "speed": _to_number(cmd.get("speed", 60)) or 60}
+                    "speed": _to_number(cmd.get("speed", 60)) or 60,
+                    "noSkip": bool(cmd.get("noSkip", False))}
 
         if t == "se":
             sid = cmd.get("seId", "")

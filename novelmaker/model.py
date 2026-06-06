@@ -54,6 +54,10 @@ COMMAND_ICONS = {t: icon for t, _, icon in COMMAND_TYPES}
 # セリフの「立ち絵表示なし」を表す表情ID（差分セレクトの既定候補）
 NO_SPRITE = "__none__"
 
+# 立ち絵の配置位置（1画面に最大3人）
+SAY_POSITIONS = [("left", "左"), ("center", "中央"), ("right", "右")]
+SPRITE_SLOTS = ["left", "center", "right"]
+
 # 変数操作の演算子
 VAR_OPS = [("set", "代入 ="), ("add", "加算 +="), ("sub", "減算 -="),
            ("mul", "乗算 *="), ("toggle", "反転(真偽)")]
@@ -137,19 +141,19 @@ def new_command(ctype: str) -> dict:
     base = {"id": uid("cmd"), "type": ctype}
     if ctype == "say":
         # 既定はキャラの最初の表情で立ち絵表示。hideSprite で個別に非表示も可。
-        base.update(charId="", exprId="", text="", hideSprite=False)
+        base.update(charId="", exprId="", text="", hideSprite=False, pos="center")
     elif ctype == "narrate":
         base.update(text="")
     elif ctype == "charExit":
-        base.update(charId="")  # 空=表示中のキャラを退場
+        base.update(charId="")  # 空=全員退場
     elif ctype == "bg":
         base.update(bgId="")
     elif ctype == "blackout":
-        base.update(mode="on")  # on=暗転 / off=解除
+        base.update(mode="on", hideUi=False)  # on=暗転 / off=解除, hideUi=UIも消す
     elif ctype == "bgm":
         base.update(action="play", bgmId="", loop=True, fadeMs=0)
     elif ctype == "endroll":
-        base.update(text="", speed=60)  # speed = スクロール速度(px/秒)
+        base.update(text="", speed=60, noSkip=False)  # noSkip=スキップ不可
     elif ctype == "se":
         base.update(seId="")
     elif ctype == "cg":
@@ -334,6 +338,8 @@ class Project:
 def default_project() -> dict:
     hero = uid("char")
     player = uid("char")
+    friend = uid("char")
+    f_normal = uid("expr")
     p_normal = uid("expr")
     e_normal, e_smile, e_sad = uid("expr"), uid("expr"), uid("expr")
     bg_room, bg_night = uid("bg"), uid("bg")
@@ -376,6 +382,10 @@ def default_project() -> dict:
             {"id": player, "name": "主人公", "color": "#9fd3ff",
              "isProtagonist": True, "showSprite": False, "expressions": [
                 {"id": p_normal, "name": "通常", "image": ""},
+            ]},
+            {"id": friend, "name": "友人", "color": "#a0e6a0",
+             "isProtagonist": False, "showSprite": True, "expressions": [
+                {"id": f_normal, "name": "通常", "image": ""},
             ]},
         ],
         "items": [
@@ -425,7 +435,13 @@ def default_project() -> dict:
             ]},
             {"id": s_a, "name": "好感ルート", "commands": [
                 {"id": uid("cmd"), "type": "say", "charId": hero, "exprId": e_smile,
-                 "text": "えへへ、嬉しいな。"},
+                 "pos": "left", "text": "えへへ、嬉しいな。"},
+                # 立ち絵を1画面に複数（左：ヒロイン／右：友人）
+                {"id": uid("cmd"), "type": "say", "charId": friend, "exprId": f_normal,
+                 "pos": "right", "text": "おっ、二人とも仲良いね！"},
+                {"id": uid("cmd"), "type": "say", "charId": hero, "exprId": e_smile,
+                 "pos": "left", "text": "もう、からかわないでよ。"},
+                {"id": uid("cmd"), "type": "charExit", "charId": friend},
                 {"id": uid("cmd"), "type": "gauge", "gaugeId": g_aff, "op": "add", "value": "20"},
                 {"id": uid("cmd"), "type": "item", "itemId": it_key, "action": "add"},
                 {"id": uid("cmd"), "type": "jump", "targetScene": s_end},
@@ -500,17 +516,20 @@ def describe_command(cmd: dict, project: "Project") -> str:
     if t == "say":
         ch = project.character(cmd.get("charId", ""))
         name = ch["name"] if ch else "（地の文）"
-        return f"{name}「{_short(cmd.get('text',''))}」"
+        pos = {"left": "[左]", "right": "[右]"}.get(cmd.get("pos", "center"), "")
+        return f"{pos}{name}「{_short(cmd.get('text',''))}」"
     if t == "narrate":
         return f"{_short(cmd.get('text',''))}"
     if t == "charExit":
         ch = project.character(cmd.get("charId", ""))
-        return f"キャラ退場 → {ch['name'] if ch else '（表示中のキャラ）'}"
+        return f"キャラ退場 → {ch['name'] if ch else '（全員）'}"
     if t == "bg":
         bg = project.background(cmd.get("bgId", ""))
         return f"背景 → {bg['name'] if bg else '（未設定）'}"
     if t == "blackout":
-        return "暗転する" if cmd.get("mode") == "on" else "暗転を解除"
+        if cmd.get("mode") == "on":
+            return "暗転する（UIも消す）" if cmd.get("hideUi") else "暗転する"
+        return "暗転を解除"
     if t == "bgm":
         fade = cmd.get("fadeMs", 0)
         fade_s = f"（フェード{fade}ms）" if fade else ""
@@ -520,7 +539,8 @@ def describe_command(cmd: dict, project: "Project") -> str:
         loop = "（ループ）" if cmd.get("loop", True) else ""
         return f"BGM再生 → {bgm['name'] if bgm else '（未設定）'}{loop}{fade_s}"
     if t == "endroll":
-        return f"エンドロール（{_short(cmd.get('text',''), 24)}）"
+        skip = "・スキップ不可" if cmd.get("noSkip") else ""
+        return f"エンドロール（{_short(cmd.get('text',''), 20)}{skip}）"
     if t == "se":
         se = project.se_track(cmd.get("seId", ""))
         return f"効果音 → {se['name'] if se else '（未設定）'}"

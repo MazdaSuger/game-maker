@@ -17,7 +17,7 @@ from PySide6.QtCore import Qt
 
 from .model import (
     Project, COMMAND_LABELS, COMMAND_ICONS, VAR_OPS, GAUGE_OPS,
-    empty_condition, uid, NO_SPRITE,
+    empty_condition, uid, NO_SPRITE, SAY_POSITIONS,
 )
 from .condition_widget import ConditionWidget
 
@@ -104,14 +104,16 @@ class CommandDialog(QDialog):
         self.text_edit = QPlainTextEdit(self.cmd.get("text", ""))
         self.text_edit.setPlaceholderText("セリフ本文。{変数名} で変数を埋め込めます。")
         self.text_edit.setMinimumHeight(100)
+        self.pos_cb = _combo(list(SAY_POSITIONS), self.cmd.get("pos", "center"))
         self.hide_sprite_cb = QCheckBox("このセリフでは立ち絵を表示しない（名前だけ）")
         self.hide_sprite_cb.setChecked(bool(self.cmd.get("hideSprite", False)))
         f.addRow("キャラ:", self.char_cb)
         f.addRow("表情:", self.expr_cb)
+        f.addRow("立ち絵の位置:", self.pos_cb)
         f.addRow("セリフ:", self.text_edit)
         f.addRow("", self.hide_sprite_cb)
-        hint = QLabel("※ 立ち絵が出ない場合は、キャラ側「立ち絵を表示する」がONか、\n"
-                      "　上のチェックが外れているかを確認してください。")
+        hint = QLabel("※ 立ち絵は1画面に最大3人（左/中央/右）まで配置できます。\n"
+                      "　出ない場合はキャラ側「立ち絵を表示する」がONか確認してください。")
         hint.setStyleSheet("color:#888;")
         f.addRow("", hint)
         self._add_form(f)
@@ -166,7 +168,14 @@ class CommandDialog(QDialog):
         self.mode_cb = _combo([("on", "暗転する（画面を暗くする）"),
                                ("off", "暗転を解除する")],
                               self.cmd.get("mode", "on"))
+        self.hideui_cb = QCheckBox("画面上のコンポーネントも消す（セリフ枠・ゲージ等）")
+        self.hideui_cb.setChecked(bool(self.cmd.get("hideUi", False)))
         f.addRow("動作:", self.mode_cb)
+        f.addRow("", self.hideui_cb)
+        hint = QLabel("※「コンポーネントも消す」をONにすると、暗転中は\n"
+                      "　セリフ枠・ゲージ・ボタン・立ち絵もすべて消えます。")
+        hint.setStyleSheet("color:#888;")
+        f.addRow("", hint)
         self._add_form(f)
 
     def _form_bgm(self):
@@ -202,9 +211,13 @@ class CommandDialog(QDialog):
         self.speed_spin.setRange(10, 400)
         self.speed_spin.setSuffix(" px/秒")
         self.speed_spin.setValue(int(self.cmd.get("speed", 60) or 60))
+        self.noskip_cb = QCheckBox("スキップ不可にする（最後まで再生）")
+        self.noskip_cb.setChecked(bool(self.cmd.get("noSkip", False)))
         f.addRow("本文:", self.text_edit)
         f.addRow("スクロール速度:", self.speed_spin)
-        hint = QLabel("※ 再生中はセリフ枠が消え、クリックでスキップできます。")
+        f.addRow("", self.noskip_cb)
+        hint = QLabel("※ 再生中はセリフ枠が消えます。スキップ不可にすると\n"
+                      "　クリックやスペースでスキップできなくなります。")
         hint.setStyleSheet("color:#888;")
         f.addRow("", hint)
         self._add_form(f)
@@ -388,6 +401,7 @@ class CommandDialog(QDialog):
             self.cmd["exprId"] = self.expr_cb.currentData() or ""
             self.cmd["text"] = self.text_edit.toPlainText()
             self.cmd["hideSprite"] = self.hide_sprite_cb.isChecked()
+            self.cmd["pos"] = self.pos_cb.currentData() or "center"
         elif t == "narrate":
             self.cmd["text"] = self.text_edit.toPlainText()
         elif t == "charExit":
@@ -396,6 +410,7 @@ class CommandDialog(QDialog):
             self.cmd["bgId"] = self.bg_cb.currentData() or ""
         elif t == "blackout":
             self.cmd["mode"] = self.mode_cb.currentData()
+            self.cmd["hideUi"] = self.hideui_cb.isChecked()
         elif t == "bgm":
             self.cmd["action"] = self.action_cb.currentData()
             self.cmd["bgmId"] = self.bgm_cb.currentData() or ""
@@ -404,6 +419,7 @@ class CommandDialog(QDialog):
         elif t == "endroll":
             self.cmd["text"] = self.text_edit.toPlainText()
             self.cmd["speed"] = self.speed_spin.value()
+            self.cmd["noSkip"] = self.noskip_cb.isChecked()
         elif t == "se":
             self.cmd["seId"] = self.se_cb.currentData() or ""
         elif t == "cg":

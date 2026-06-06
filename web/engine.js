@@ -139,8 +139,8 @@
     return {
       variables: {}, gauges: {}, items: [],
       scene_id: "", cmd_index: 0,
-      bg_id: "", blackout: false, cg_id: "", char_id: "", expr_id: "",
-      bgm_id: "", bgm_fade: 0, discovered_endings: [],
+      bg_id: "", blackout: false, blackout_hide_ui: false, cg_id: "",
+      sprites: {}, bgm_id: "", bgm_fade: 0, discovered_endings: [],
     };
   }
 
@@ -273,31 +273,45 @@
     const st = this.state;
 
     if (t === "say") {
-      const ch = this.character(cmd.charId);
+      const cid = cmd.charId || "";
+      const ch = this.character(cid);
       const exprId = cmd.exprId || "";
-      // showSprite=false（主人公など）や hideSprite=true は直前の立ち絵を維持
+      let pos = cmd.pos || "center";
+      if (!["left", "center", "right"].includes(pos)) pos = "center";
       let show = ch ? (ch.showSprite !== false) : false;
       if (cmd.hideSprite) show = false;
-      if (show) {
-        st.char_id = cmd.charId || "";
-        st.expr_id = exprId;
+      if (show && cid) {
+        Object.keys(st.sprites).forEach((p) => {
+          if (st.sprites[p].charId === cid && p !== pos) delete st.sprites[p];
+        });
+        st.sprites[pos] = { charId: cid, exprId: exprId };
       }
       return {
         kind: "say",
         name: ch ? ch.name : "",
         color: ch ? (ch.color || "#ffffff") : "#ffffff",
         text: this._interp(cmd.text),
-        charId: st.char_id, exprId: st.expr_id,
+        speaker: cid,
       };
     }
     if (t === "narrate") return { kind: "narrate", text: this._interp(cmd.text) };
     if (t === "charExit") {
       const target = cmd.charId || "";
-      if (!target || st.char_id === target) { st.char_id = ""; st.expr_id = ""; }
+      if (!target) { st.sprites = {}; }
+      else {
+        Object.keys(st.sprites).forEach((p) => {
+          if (st.sprites[p].charId === target) delete st.sprites[p];
+        });
+      }
       return null;
     }
     if (t === "bg") { st.bg_id = cmd.bgId || ""; return null; }
-    if (t === "blackout") { st.blackout = (cmd.mode || "on") === "on"; return null; }
+    if (t === "blackout") {
+      const on = (cmd.mode || "on") === "on";
+      st.blackout = on;
+      st.blackout_hide_ui = on && !!cmd.hideUi;
+      return null;
+    }
     if (t === "bgm") {
       st.bgm_fade = parseInt(cmd.fadeMs || 0, 10) || 0;
       st.bgm_id = (cmd.action === "stop") ? "" : (cmd.bgmId || "");
@@ -305,7 +319,7 @@
     }
     if (t === "endroll") {
       return { kind: "endroll", text: this._interp(cmd.text),
-               speed: toNumber(cmd.speed) || 60 };
+               speed: toNumber(cmd.speed) || 60, noSkip: !!cmd.noSkip };
     }
     if (t === "se") {
       if (cmd.seId) { this._sfx = this._sfx || []; this._sfx.push(cmd.seId); }

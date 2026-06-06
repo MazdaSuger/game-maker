@@ -32,15 +32,17 @@ html, body {
 }
 #blackout.on { opacity: 1; }
 #char {
-  position: absolute; left: 50%; bottom: 26%; transform: translateX(-50%);
-  height: 78%; display: flex; align-items: center; justify-content: center;
-  pointer-events: none;
+  position: absolute; inset: 0; pointer-events: none;
 }
-#char img { height: 100%; object-fit: contain; }
-.char-ph {
-  width: 18vw; height: 100%; border-radius: 16px;
-  display: flex; align-items: center; justify-content: center; text-align: center;
-  font-weight: bold; font-size: 20px; padding: 12px; white-space: pre-line;
+.sprite {
+  position: absolute; transform: translateX(-50%);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.sprite img { height: 100%; object-fit: contain; }
+.sprite.char-ph {
+  width: 16vw; border-radius: 16px;
+  align-items: center; text-align: center;
+  font-weight: bold; font-size: 20px; padding: 12px; white-space: pre-line; color: #fff;
 }
 
 /* ゲージ */

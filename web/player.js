@@ -56,7 +56,7 @@
         $("menu").style.display = compHidden("menu") ? "none" : "flex";
       }
     }
-    if (ev.kind === "endroll") { startEndroll(ev.text || "", ev.speed || 60); return; }
+    if (ev.kind === "endroll") { startEndroll(ev.text || "", ev.speed || 60, ev.noSkip); return; }
     hideOverlay("ov-name"); // 入力以外では閉じる前提
 
     const k = ev.kind;
@@ -190,23 +190,32 @@
       elBg.style.backgroundColor = "#101018";
     }
 
-    // 立ち絵
+    // 立ち絵（最大3人：左/中央/右）
     elChar.innerHTML = "";
-    if (!st.blackout && st.char_id && !compHidden("sprite")) {
-      const ch = chars[st.char_id];
-      let ex = ch && (ch.expressions || []).find((e) => e.id === st.expr_id);
-      if (ch && !ex && (ch.expressions || []).length) ex = ch.expressions[0];
-      if (ex && ex.image) {
-        const img = document.createElement("img");
-        img.src = ex.image; elChar.appendChild(img);
-      } else if (ch) {
-        const ph = document.createElement("div");
-        ph.className = "char-ph";
-        ph.style.background = hexA(ch.color || "#888", 0.28);
-        ph.style.border = "2px solid " + (ch.color || "#888");
-        ph.textContent = ch.name + (ex ? `\n（${ex.name}）` : "");
-        elChar.appendChild(ph);
-      }
+    if (!st.blackout && !compHidden("sprite") && st.sprites) {
+      const sp = layoutOf("sprite");
+      ["left", "center", "right"].forEach((pos) => {
+        const entry = st.sprites[pos];
+        if (!entry) return;
+        const ch = chars[entry.charId];
+        if (!ch || ch.showSprite === false) return;
+        let ex = (ch.expressions || []).find((e) => e.id === entry.exprId);
+        if (!ex && (ch.expressions || []).length) ex = ch.expressions[0];
+        const el = document.createElement("div");
+        el.className = "sprite";
+        el.style.left = spriteX(pos, sp.x) + "%";
+        el.style.bottom = (100 - sp.y) + "%";
+        el.style.height = sp.scale + "%";
+        if (ex && ex.image) {
+          el.innerHTML = `<img src="${ex.image}" alt="">`;
+        } else {
+          el.classList.add("char-ph");
+          el.style.background = hexA(ch.color || "#888", 0.28);
+          el.style.border = "2px solid " + (ch.color || "#888");
+          el.textContent = ch.name + (ex ? `\n（${ex.name}）` : "");
+        }
+        elChar.appendChild(el);
+      });
     }
 
     // CG（背景・立ち絵の上、全画面）
@@ -233,8 +242,9 @@
   }
 
   // ---------------- エンドロール ----------------
-  let endrollTimer = null, endrollY = 0, endrollSpeed = 60;
-  function startEndroll(text, speed) {
+  let endrollTimer = null, endrollY = 0, endrollSpeed = 60, endrollNoSkip = false;
+  function startEndroll(text, speed, noSkip) {
+    endrollNoSkip = !!noSkip;
     setGameChrome(false);
     elGauges.style.display = "none";
     const wrap = $("endroll"), t = $("endroll-text");
@@ -258,6 +268,7 @@
   }
   function finishEndroll() { stopEndroll(); present(rt.advance()); }
   function skipEndroll() {
+    if (endrollNoSkip) return;
     if (!$("endroll").classList.contains("hidden")) finishEndroll();
   }
 
@@ -544,7 +555,11 @@
     return Object.assign({}, DEFAULT_LAYOUT[key], L[key] || {});
   }
 
-  function compHidden(key) { return !!layoutOf(key).hidden; }
+  function compHidden(key) {
+    const st = rt.state;
+    if (st.blackout && st.blackout_hide_ui) return true;  // 暗転(UIも消す)
+    return !!layoutOf(key).hidden;
+  }
 
   function applyLayout() {
     const m = layoutOf("message");
@@ -561,10 +576,12 @@
     const c = layoutOf("choices");
     Object.assign(elChoices.style,
       { left: c.x + "%", top: c.y + "%", transform: "translate(-50%,-50%)" });
-    const sp = layoutOf("sprite");
-    Object.assign(elChar.style,
-      { left: sp.x + "%", bottom: (100 - sp.y) + "%", height: sp.scale + "%",
-        transform: "translateX(-50%)" });
+    // 立ち絵(#char)はステージ全面のコンテナ。各立ち絵は updateStage で配置。
+  }
+  function spriteX(pos, centerX) {
+    if (pos === "left") return Math.max(8, centerX - 25);
+    if (pos === "right") return Math.min(92, centerX + 25);
+    return centerX;
   }
 
   function applyTheme() {

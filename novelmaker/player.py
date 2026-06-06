@@ -413,7 +413,13 @@ class PlayerWidget(QWidget):
     # イベント提示
     # ------------------------------------------------------------------
     def _comp_hidden(self, key: str) -> bool:
-        """レイアウトで「非表示」指定されたコンポーネントか。"""
+        """コンポーネントを隠すか。
+
+        レイアウトの「非表示」指定、または暗転(UIも消す)中なら True。
+        """
+        st = self.runtime.state
+        if st.blackout and st.blackout_hide_ui:
+            return True
         return bool(merged_layout(self.project).get(key, {}).get("hidden", False))
 
     def _present(self, ev: dict):
@@ -433,7 +439,8 @@ class PlayerWidget(QWidget):
                 self.menu_frame.setVisible(not self._comp_hidden("menu"))
 
         if kind == "endroll":
-            self._start_endroll(ev.get("text", ""), ev.get("speed", 60))
+            self._start_endroll(ev.get("text", ""), ev.get("speed", 60),
+                                ev.get("noSkip", False))
 
         elif kind in ("say", "narrate"):
             self.msg_frame.setVisible(not self._comp_hidden("message"))
@@ -496,13 +503,14 @@ class PlayerWidget(QWidget):
         self.text_label.setText(self._full_text)
 
     # --- エンドロール ---
-    def _start_endroll(self, text: str, speed):
+    def _start_endroll(self, text: str, speed, no_skip: bool = False):
         # ゲーム中UIを隠す
         self.msg_frame.hide()
         self.gauge_panel.hide()
         self.items_btn.hide()
         self.menu_frame.hide()
         self.choice_frame.hide()
+        self._endroll_no_skip = bool(no_skip)
         self._endroll_speed = max(10, float(speed or 60))
         w, h = self.width(), self.height()
         self.endroll_overlay.setGeometry(0, 0, w, h)
@@ -530,7 +538,7 @@ class PlayerWidget(QWidget):
         self._present(self.runtime.advance())
 
     def _skip_endroll(self):
-        if self.endroll_overlay.isVisible():
+        if self.endroll_overlay.isVisible() and not getattr(self, "_endroll_no_skip", False):
             self._finish_endroll()
 
     # --- クリックで進める ---
@@ -702,10 +710,10 @@ class PlayerWidget(QWidget):
         if not drew_bg:
             p.fillRect(rect, QColor("#101018"))
 
-        # 立ち絵（暗転中・CG表示中・非表示指定中は描かない）
-        if (not st.blackout and not st.cg_id and st.char_id
+        # 立ち絵（暗転中・CG表示中・非表示指定中は描かない／最大3人）
+        if (not st.blackout and not st.cg_id and st.sprites
                 and not self._comp_hidden("sprite")):
-            self._paint_character(p, rect, st)
+            self._paint_sprites(p, rect, st)
 
         # CG（画面全体・背景と立ち絵の上）
         if st.cg_id and not st.blackout:
@@ -738,48 +746,57 @@ class PlayerWidget(QWidget):
             p.setFont(font)
             p.drawText(rect, Qt.AlignCenter, f'［CG］{cg.get("name", "")}')
 
-    def _paint_character(self, p: QPainter, rect: QRect, st: GameState):
-        ch = self.project.character(st.char_id)
-        if not ch:
+    @staticmethod
+    def _pos_x_pct(pos: str, center_x: float) -> float:
+        """立ち絵スロットの中央x（％）。左/右は中央から±25%。"""
+        if pos == "left":
+            return max(8.0, center_x - 25)
+        if pos == "right":
+            return min(92.0, center_x + 25)
+        return center_x
+
+    def _paint_sprites(self, p: QPainter, rect: QRect, st: GameState):
+        sp = merged_layout(self.project)["sprite"]
+        avail_h = int(rect.height() * (sp.get("scale", 80) / 100.0))
+        by = int(sp.get("y", 99) / 100.0 * rect.height())  # 下端y
+        center_x = sp.get("x", 50)
+        # 左→中央→右 の順で描画
+        for pos in ("left", "center", "right"):
+            entry = st.sprites.get(pos)
+            if not entry:
+                continue
+            cx = int(self._pos_x_pct(pos, center_x) / 100.0 * rect.width())
+            self._paint_one_sprite(p, rect, entry, cx, by, avail_h)
+
+    def _paint_one_sprite(self, p: QPainter, rect: QRect, entry: dict,
+                          cx: int, by: int, avail_h: int):
+        ch = self.project.character(entry.get("charId", ""))
+        if not ch or not ch.get("showSprite", True):
             return
-        # 立ち絵非表示キャラは描かない（念のため）
-        if not ch.get("showSprite", True):
-            return
-        ex = self.project.expression(st.char_id, st.expr_id)
+        ex = self.project.expression(entry.get("charId", ""), entry.get("exprId", ""))
         if ex is None:
-            # 表情未指定/不明なら最初の表情を使う
             exprs = ch.get("expressions", [])
             ex = exprs[0] if exprs else None
         pix = self._pixmap(ex.get("image", "")) if ex else None
-        sp = merged_layout(self.project)["sprite"]
-        avail_h = int(rect.height() * (sp.get("scale", 80) / 100.0))
-        cx = int(sp.get("x", 50) / 100.0 * rect.width())   # 中央x
-        by = int(sp.get("y", 99) / 100.0 * rect.height())  # 下端y
         if pix is not None:
             scaled = pix.scaledToHeight(avail_h, Qt.SmoothTransformation)
-            x = cx - scaled.width() // 2
-            y = by - scaled.height()
-            p.drawPixmap(x, y, scaled)
+            p.drawPixmap(cx - scaled.width() // 2, by - scaled.height(), scaled)
         else:
-            # プレースホルダ（色付き矩形＋名前/表情）
-            w = int(rect.width() * 0.22)
-            h = avail_h
+            w = int(rect.width() * 0.18)
             x = cx - w // 2
-            y = by - h
+            y = by - avail_h
             color = QColor(ch.get("color", "#888888"))
             color.setAlpha(70)
             p.setBrush(color)
             p.setPen(QColor(ch.get("color", "#888888")))
-            p.drawRoundedRect(x, y, w, h, 16, 16)
+            p.drawRoundedRect(x, y, w, avail_h, 16, 16)
             p.setPen(QColor("#ffffff"))
-            font = QFont()
-            font.setPointSize(14)
-            font.setBold(True)
+            font = QFont(); font.setPointSize(14); font.setBold(True)
             p.setFont(font)
             label = ch.get("name", "")
             if ex:
                 label += f'\n（{ex.get("name","")}）'
-            p.drawText(QRect(x, y, w, h), Qt.AlignCenter | Qt.TextWordWrap, label)
+            p.drawText(QRect(x, y, w, avail_h), Qt.AlignCenter | Qt.TextWordWrap, label)
 
     def _msg_height(self) -> int:
         return max(150, int(self.height() * 0.26))
