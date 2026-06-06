@@ -11,7 +11,18 @@
   if (!DATA) { document.body.innerHTML = "ゲームデータが見つかりません。"; return; }
   document.title = (DATA.meta && DATA.meta.title) || "ノベルゲーム";
 
-  const rt = new window.NovelEngine.Runtime(DATA);
+  // システムデータ（全体共有・永続）: localStorage に保存
+  const SYS_KEY = "novelmaker_system_" + (DATA.meta.title || "game");
+  let systemData;
+  try {
+    systemData = JSON.parse(localStorage.getItem(SYS_KEY)) || { vars: {}, endings: {} };
+  } catch (e) { systemData = { vars: {}, endings: {} }; }
+  systemData.vars = systemData.vars || {};
+  systemData.endings = systemData.endings || {};
+  function persistSystem() {
+    try { localStorage.setItem(SYS_KEY, JSON.stringify(systemData)); } catch (e) {}
+  }
+  const rt = new window.NovelEngine.Runtime(DATA, systemData, persistSystem);
 
   // 索引
   const byId = (list) => Object.fromEntries((list || []).map((e) => [e.id, e]));
@@ -154,7 +165,8 @@
     const badge = $("ending-badge");
     if (ev.hidden) { badge.textContent = "🔒 裏エンディング 🔒"; badge.style.color = "#ffd56b"; }
     else { badge.textContent = "★ ENDING ★"; badge.style.color = "#9fe3ff"; }
-    $("ending-name").textContent = ev.name || "";
+    $("ending-name").textContent =
+      (ev.name || "") + (ev.count > 1 ? `　（${ev.count}回目）` : "");
     $("ending-desc").textContent = ev.desc || "";
     showOverlay("ov-ending");
   }

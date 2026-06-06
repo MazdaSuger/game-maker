@@ -59,6 +59,16 @@ def evaluate_condition(cond: Optional[dict], state: "GameState") -> bool:
     return all(results) if logic == "and" else any(results)
 
 
+def _read_var(state: "GameState", name: str):
+    """変数を読む。ローカル変数→システム変数の順に解決する。"""
+    if name in state.variables:
+        return state.variables[name]
+    sysd = getattr(state, "system", None)
+    if sysd and name in sysd.get("vars", {}):
+        return sysd["vars"][name]
+    return None
+
+
 def _eval_term(term: dict, state: "GameState") -> bool:
     kind = term.get("kind")
     ref = term.get("ref", "")
@@ -66,7 +76,7 @@ def _eval_term(term: dict, state: "GameState") -> bool:
     raw = term.get("value", "")
 
     if kind == "var":
-        val = state.variables.get(ref)
+        val = _read_var(state, ref)
         # 真偽値の比較（"true"/"false" や 1/0 を許容）
         if isinstance(val, bool):
             want = str(raw).strip().lower() in ("true", "1", "はい", "yes", "on")
@@ -88,6 +98,12 @@ def _eval_term(term: dict, state: "GameState") -> bool:
     if kind == "gauge":
         val = state.gauges.get(ref, 0)
         return _compare(_to_number(val), op, _to_number(raw))
+
+    if kind == "ending":
+        # エンディング到達回数（システムデータ）
+        sysd = getattr(state, "system", None) or {}
+        cnt = (sysd.get("endings", {}) or {}).get(ref, 0)
+        return _compare(_to_number(cnt), op, _to_number(raw))
 
     if kind == "item":
         has = ref in state.items
@@ -182,6 +198,16 @@ class GameState:
 # ---------------------------------------------------------------------------
 # Runtime（インタプリタ）
 # ---------------------------------------------------------------------------
+class _MemStore:
+    """永続化しないインメモリのシステムストア（既定）。"""
+
+    def __init__(self):
+        self.data = {"vars": {}, "endings": {}}
+
+    def save(self):
+        pass
+
+
 class Runtime:
     """ノベルゲームを進行させるインタプリタ。
 
@@ -196,11 +222,27 @@ class Runtime:
     ``runtime.state`` を読んでステージ(背景/キャラ/ゲージ等)を再描画する。
     """
 
-    def __init__(self, project: Project):
+    def __init__(self, project: Project, system_store=None):
         self.project = project
+        # システムデータ（ゲーム全体で共有・永続）。store.data = {"vars":{}, "endings":{}}
+        self.system = system_store or _MemStore()
+        self.system.data.setdefault("vars", {})
+        self.system.data.setdefault("endings", {})
+        self._sysnames = {v.get("name") for v in project.data.get("systemVars", [])}
         self.state = GameState()
         self._pending: Optional[dict] = None  # 入力待ちイベント
         self._sfx: list[str] = []             # この区間で再生するSE
+
+    def _init_system_vars(self):
+        """システム変数を（未登録なら）初期値で用意する。値は永続。"""
+        changed = False
+        for v in self.project.data.get("systemVars", []):
+            name = v.get("name")
+            if name and name not in self.system.data["vars"]:
+                self.system.data["vars"][name] = _initial_var_value(v)
+                changed = True
+        if changed:
+            self.system.save()
 
     # --- 開始 / ロード ------------------------------------------------
     def start(self, start_scene: Optional[str] = None) -> dict:
@@ -218,12 +260,16 @@ class Runtime:
         if not st.scene_id and self.project.scenes:
             st.scene_id = self.project.scenes[0]["id"]
         st.cmd_index = 0
+        self._init_system_vars()
+        st.system = self.system.data          # システムデータへの参照
         self.state = st
         self._pending = None
         return self.advance()
 
     def load_state(self, state: GameState) -> dict:
         """セーブ状態から再開する。"""
+        self._init_system_vars()
+        state.system = self.system.data
         self.state = state
         return self.advance()
 
@@ -424,13 +470,20 @@ class Runtime:
 
         if t == "ending":
             end = self.project.ending(cmd.get("endingId", ""))
-            if end and end["id"] not in self.state.discovered_endings:
-                self.state.discovered_endings.append(end["id"])
+            if end:
+                if end["id"] not in self.state.discovered_endings:
+                    self.state.discovered_endings.append(end["id"])
+                # システムデータ：エンディング到達回数を加算して永続化
+                eid = end["id"]
+                ec = self.system.data.setdefault("endings", {})
+                ec[eid] = int(ec.get(eid, 0)) + 1
+                self.system.save()
             return {
                 "kind": "ending",
                 "name": end["name"] if end else "エンディング",
                 "desc": end.get("desc", "") if end else "",
                 "hidden": end.get("hidden", False) if end else False,
+                "count": self.system.data["endings"].get(end["id"], 0) if end else 0,
             }
 
         # 未知のコマンドは無視
@@ -461,13 +514,21 @@ class Runtime:
         self.state.cmd_index = 0
 
     def _interp(self, text: str) -> str:
-        """テキスト内の {変数名} を現在値で置換する。"""
+        """テキスト内の {変数名} を現在値で置換する（ローカル→システム）。"""
         def repl(m):
             name = m.group(1)
-            if name in self.state.variables:
-                return str(self.state.variables[name])
-            return m.group(0)
+            val = _read_var(self.state, name)
+            return str(val) if val is not None else m.group(0)
         return _VAR_PATTERN.sub(repl, text)
+
+    def _var_container(self, name: str):
+        """変数名の格納先を返す。(dict, 永続フラグ)。
+
+        システム変数として定義された名前ならシステムストアへ、
+        それ以外はローカル変数へ書き込む。"""
+        if name in self._sysnames:
+            return self.system.data["vars"], True
+        return self.state.variables, False
 
     def _apply_setvar(self, cmd: dict):
         name = cmd.get("varName", "")
@@ -475,34 +536,35 @@ class Runtime:
             return
         op = cmd.get("op", "set")
         raw = cmd.get("value", "")
-        cur = self.state.variables.get(name)
+        store, persist = self._var_container(name)
+        cur = store.get(name)
 
         if op == "toggle":
-            self.state.variables[name] = not bool(cur)
-            return
-        if op == "set":
+            store[name] = not bool(cur)
+        elif op == "set":
             # 真偽値変数なら真偽に、数値なら数値に、それ以外は文字列に
             if isinstance(cur, bool):
-                self.state.variables[name] = str(raw).strip().lower() in (
+                store[name] = str(raw).strip().lower() in (
                     "true", "1", "はい", "yes", "on")
             elif isinstance(cur, (int, float)) and _looks_numeric(str(raw)):
-                self.state.variables[name] = _to_number(raw)
+                store[name] = _to_number(raw)
             elif _looks_numeric(str(raw)) and (cur is None or _looks_numeric(str(cur))):
-                self.state.variables[name] = _to_number(raw)
+                store[name] = _to_number(raw)
             else:
-                self.state.variables[name] = str(raw)
-            return
-        # 算術系
-        base = _to_number(cur)
-        delta = _to_number(raw)
-        if op == "add":
-            base += delta
-        elif op == "sub":
-            base -= delta
-        elif op == "mul":
-            base *= delta
-        # 整数なら整数で保持
-        self.state.variables[name] = int(base) if base == int(base) else base
+                store[name] = str(raw)
+        else:
+            # 算術系
+            base = _to_number(cur)
+            delta = _to_number(raw)
+            if op == "add":
+                base += delta
+            elif op == "sub":
+                base -= delta
+            elif op == "mul":
+                base *= delta
+            store[name] = int(base) if base == int(base) else base
+        if persist:
+            self.system.save()
 
     def _apply_gauge(self, cmd: dict):
         gid = cmd.get("gaugeId", "")

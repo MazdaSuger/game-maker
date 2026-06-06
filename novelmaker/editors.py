@@ -285,6 +285,20 @@ class VariableEditor(ListEditor):
 
 
 # ===========================================================================
+# システム変数エディタ（ゲーム全体で共有・永続）
+# ===========================================================================
+class SystemVarEditor(VariableEditor):
+    title = "システム変数"
+
+    def entries(self):
+        return self.project.system_vars
+
+    def default_entry(self):
+        return {"id": uid("svar"), "name": f"sys{len(self.entries())+1}",
+                "type": "number", "initial": 0}
+
+
+# ===========================================================================
 # ゲージエディタ
 # ===========================================================================
 class GaugeEditor(ListEditor):

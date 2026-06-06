@@ -127,6 +127,8 @@ def new_term(kind: str = "var") -> dict:
     """新しい条件の項を返す。"""
     if kind == "item":
         return {"kind": "item", "ref": "", "op": "has", "value": ""}
+    if kind == "ending":
+        return {"kind": "ending", "ref": "", "op": ">=", "value": "1"}
     return {"kind": kind, "ref": "", "op": "==", "value": "0"}
 
 
@@ -217,6 +219,10 @@ class Project:
     @property
     def variables(self) -> list:
         return self.data["variables"]
+
+    @property
+    def system_vars(self) -> list:
+        return self.data.setdefault("systemVars", [])
 
     @property
     def gauges(self) -> list:
@@ -352,6 +358,10 @@ def default_project() -> dict:
             {"id": uid("var"), "name": "playerName", "type": "string", "initial": "主人公"},
             {"id": uid("var"), "name": "flag_secret", "type": "boolean", "initial": False},
         ],
+        "systemVars": [
+            # ゲーム全体で共有・永続するシステム変数（プレイをまたいで保持）
+            {"id": uid("svar"), "name": "clearCount", "type": "number", "initial": 0},
+        ],
         "gauges": [
             {"id": g_aff, "name": "好感度", "min": 0, "max": 100,
              "initial": 50, "color": "#ff6b9d", "show": True},
@@ -446,6 +456,8 @@ def default_project() -> dict:
                  "targetTrue": s_true, "targetFalse": s_normal},
             ]},
             {"id": s_true, "name": "[END] トゥルー", "commands": [
+                {"id": uid("cmd"), "type": "setVar", "varName": "clearCount",
+                 "op": "add", "value": "1"},  # システム変数（永続）
                 {"id": uid("cmd"), "type": "bgm", "action": "stop", "fadeMs": 2000},
                 {"id": uid("cmd"), "type": "endroll",
                  "text": "― 完 ―\n\n\n企画・シナリオ\n{playerName}\n\n\n"
@@ -455,6 +467,8 @@ def default_project() -> dict:
                 {"id": uid("cmd"), "type": "ending", "endingId": end_true},
             ]},
             {"id": s_normal, "name": "[END] ノーマル", "commands": [
+                {"id": uid("cmd"), "type": "setVar", "varName": "clearCount",
+                 "op": "add", "value": "1"},
                 {"id": uid("cmd"), "type": "ending", "endingId": end_normal},
             ]},
             {"id": s_secret, "name": "[END] 裏エンド", "commands": [
@@ -465,6 +479,8 @@ def default_project() -> dict:
                 {"id": uid("cmd"), "type": "cg", "cgId": cg_event, "action": "hide"},
                 {"id": uid("cmd"), "type": "setVar", "varName": "flag_secret",
                  "op": "set", "value": "true"},
+                {"id": uid("cmd"), "type": "setVar", "varName": "clearCount",
+                 "op": "add", "value": "1"},
                 {"id": uid("cmd"), "type": "ending", "endingId": end_secret},
             ]},
         ],

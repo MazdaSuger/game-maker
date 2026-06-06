@@ -55,14 +55,28 @@
     return logic === "and" ? results.every(Boolean) : results.some(Boolean);
   }
 
+  function readVar(state, name) {
+    if (Object.prototype.hasOwnProperty.call(state.variables, name))
+      return state.variables[name];
+    const sys = state.system;
+    if (sys && sys.vars && Object.prototype.hasOwnProperty.call(sys.vars, name))
+      return sys.vars[name];
+    return undefined;
+  }
+
   function evalTerm(term, state) {
     const kind = term.kind;
     const ref = term.ref || "";
     const op = term.op || "==";
     const raw = term.value !== undefined ? term.value : "";
 
+    if (kind === "ending") {
+      const sys = state.system || {};
+      const cnt = (sys.endings || {})[ref] || 0;
+      return compare(toNumber(cnt), op, toNumber(raw));
+    }
     if (kind === "var") {
-      const val = state.variables[ref];
+      const val = readVar(state, ref);
       if (typeof val === "boolean") {
         const want = ["true", "1", "はい", "yes", "on"].includes(
           String(raw).trim().toLowerCase());
@@ -102,8 +116,14 @@
   // -------------------------------------------------------------------
   // Runtime
   // -------------------------------------------------------------------
-  function Runtime(project) {
+  function Runtime(project, system, persist) {
     this.project = project;
+    // システムデータ（永続・全体共有）
+    this.system = system || { vars: {}, endings: {} };
+    this.system.vars = this.system.vars || {};
+    this.system.endings = this.system.endings || {};
+    this._persist = typeof persist === "function" ? persist : function () {};
+    this._sysnames = new Set((project.systemVars || []).map((v) => v.name));
     this._scenes = indexById(project.scenes);
     this._chars = indexById(project.characters);
     this._bgs = indexById(project.backgrounds);
@@ -137,6 +157,17 @@
   Runtime.prototype.ending = function (id) { return this._endings[id] || null; };
   Runtime.prototype.scene = function (id) { return this._scenes[id] || null; };
 
+  Runtime.prototype._initSystemVars = function () {
+    let changed = false;
+    (this.project.systemVars || []).forEach((v) => {
+      if (!Object.prototype.hasOwnProperty.call(this.system.vars, v.name)) {
+        this.system.vars[v.name] = initialVarValue(v);
+        changed = true;
+      }
+    });
+    if (changed) this._persist();
+  };
+
   Runtime.prototype.start = function (startScene) {
     const st = newState();
     (this.project.variables || []).forEach((v) => {
@@ -150,12 +181,16 @@
       st.scene_id = this.project.scenes[0].id;
     }
     st.cmd_index = 0;
+    this._initSystemVars();
+    st.system = this.system;
     this.state = st;
     this._pending = null;
     return this.advance();
   };
 
   Runtime.prototype.loadState = function (state) {
+    this._initSystemVars();
+    state.system = this.system;
     this.state = state;
     this._pending = null;
     return this.advance();
@@ -228,7 +263,8 @@
   Runtime.prototype._interp = function (text) {
     const st = this.state;
     return String(text || "").replace(VAR_PATTERN, (m, name) => {
-      return (name in st.variables) ? String(st.variables[name]) : m;
+      const v = readVar(st, name);
+      return v !== undefined ? String(v) : m;
     });
   };
 
@@ -320,13 +356,20 @@
     }
     if (t === "ending") {
       const end = this.ending(cmd.endingId);
-      if (end && !st.discovered_endings.includes(end.id))
-        st.discovered_endings.push(end.id);
+      let count = 0;
+      if (end) {
+        if (!st.discovered_endings.includes(end.id))
+          st.discovered_endings.push(end.id);
+        this.system.endings[end.id] = (this.system.endings[end.id] || 0) + 1;
+        count = this.system.endings[end.id];
+        this._persist();
+      }
       return {
         kind: "ending",
         name: end ? end.name : "エンディング",
         desc: end ? (end.desc || "") : "",
         hidden: end ? !!end.hidden : false,
+        count: count,
       };
     }
     return null;
@@ -337,29 +380,31 @@
     if (!name) return;
     const op = cmd.op || "set";
     const raw = cmd.value !== undefined ? cmd.value : "";
-    const st = this.state;
-    const cur = st.variables[name];
+    const persist = this._sysnames.has(name);
+    const store = persist ? this.system.vars : this.state.variables;
+    const cur = store[name];
 
-    if (op === "toggle") { st.variables[name] = !cur; return; }
-    if (op === "set") {
+    if (op === "toggle") { store[name] = !cur; }
+    else if (op === "set") {
       if (typeof cur === "boolean") {
-        st.variables[name] = ["true", "1", "はい", "yes", "on"]
+        store[name] = ["true", "1", "はい", "yes", "on"]
           .includes(String(raw).trim().toLowerCase());
       } else if (typeof cur === "number" && looksNumeric(String(raw))) {
-        st.variables[name] = toNumber(raw);
+        store[name] = toNumber(raw);
       } else if (looksNumeric(String(raw)) &&
                  (cur === undefined || cur === null || looksNumeric(String(cur)))) {
-        st.variables[name] = toNumber(raw);
+        store[name] = toNumber(raw);
       } else {
-        st.variables[name] = String(raw);
+        store[name] = String(raw);
       }
-      return;
+    } else {
+      let base = toNumber(cur), delta = toNumber(raw);
+      if (op === "add") base += delta;
+      else if (op === "sub") base -= delta;
+      else if (op === "mul") base *= delta;
+      store[name] = base;
     }
-    let base = toNumber(cur), delta = toNumber(raw);
-    if (op === "add") base += delta;
-    else if (op === "sub") base -= delta;
-    else if (op === "mul") base *= delta;
-    st.variables[name] = base;
+    if (persist) this._persist();
   };
 
   Runtime.prototype._applyGauge = function (cmd) {

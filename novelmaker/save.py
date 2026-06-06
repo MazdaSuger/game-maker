@@ -94,3 +94,40 @@ class SaveManager:
         if 0 <= index < NUM_SLOTS:
             self.slots[index] = None
             self.flush()
+
+
+class SystemStore:
+    """ゲーム全体で共有・永続化されるシステムデータ。
+
+    ``data = {"vars": {名前: 値}, "endings": {endingId: 回数}}``
+    プレイをまたいで保持される（10スロットのセーブとは独立）。
+    """
+
+    def __init__(self, path: str):
+        self.path = path
+        self.data = {"vars": {}, "endings": {}}
+        self.load()
+
+    def load(self):
+        if not os.path.exists(self.path):
+            self.data = {"vars": {}, "endings": {}}
+            return
+        try:
+            with open(self.path, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            self.data = {"vars": dict(d.get("vars", {})),
+                         "endings": dict(d.get("endings", {}))}
+        except (OSError, ValueError):
+            self.data = {"vars": {}, "endings": {}}
+
+    def save(self):
+        try:
+            os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
+            with open(self.path, "w", encoding="utf-8") as f:
+                json.dump(self.data, f, ensure_ascii=False, indent=2)
+        except OSError:
+            pass
+
+    def reset(self):
+        self.data = {"vars": {}, "endings": {}}
+        self.save()

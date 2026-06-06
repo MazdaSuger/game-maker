@@ -40,11 +40,12 @@ except Exception:  # pragma: no cover
 class PlayerWidget(QWidget):
     exited = Signal()
 
-    def __init__(self, project: Project, save_manager: SaveManager, parent=None):
+    def __init__(self, project: Project, save_manager: SaveManager,
+                 system_store=None, parent=None):
         super().__init__(parent)
         self.project = project
         self.saves = save_manager
-        self.runtime = Runtime(project)
+        self.runtime = Runtime(project, system_store)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setMinimumSize(800, 500)
 
@@ -605,7 +606,11 @@ class PlayerWidget(QWidget):
         self.ending_badge.setText("🔒 裏エンディング 🔒" if hidden else "★ ENDING ★")
         self.ending_badge.setStyleSheet(
             "color:#ffd56b;" if hidden else "color:#9fe3ff;")
-        self.ending_name.setText(ev.get("name", ""))
+        cnt = ev.get("count", 0)
+        name = ev.get("name", "")
+        if cnt and cnt > 1:
+            name += f'　（{cnt}回目）'
+        self.ending_name.setText(name)
         self.ending_desc.setText(ev.get("desc", ""))
         self.ending_overlay.show()
         self._raise_overlays()

@@ -10,19 +10,19 @@ from PySide6.QtWidgets import (
     QPushButton,
 )
 from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtCore import Qt, QStandardPaths
+from PySide6.QtCore import Qt, QStandardPaths, Signal
 
 from . import APP_NAME, __version__
 from .model import Project
 from .scene_editor import SceneEditor
 from .editors import (
     CharacterEditor, ItemEditor, VariableEditor, GaugeEditor,
-    BackgroundEditor, BgmEditor, EndingEditor, SeEditor, CgEditor,
+    BackgroundEditor, BgmEditor, EndingEditor, SeEditor, CgEditor, SystemVarEditor,
 )
 from .layout_editor import LayoutEditor
 from .flowchart import FlowchartTab
 from .player import PlayerWidget
-from .save import SaveManager, default_save_dir
+from .save import SaveManager, SystemStore, default_save_dir
 from .exporter import export_to_html, export_to_zip
 
 PROJECT_FILTER = "ノベルメーカー プロジェクト (*.nvproj);;JSON (*.json);;すべて (*.*)"
@@ -33,6 +33,14 @@ def save_path_for(project: Project) -> str:
         base = os.path.splitext(project.path)[0]
         return base + ".saves.json"
     return os.path.join(default_save_dir(), "untitled.saves.json")
+
+
+def system_path_for(project: Project) -> str:
+    """システムデータ（全体共有・永続）の保存先。"""
+    if project.path:
+        base = os.path.splitext(project.path)[0]
+        return base + ".system.json"
+    return os.path.join(default_save_dir(), "untitled.system.json")
 
 
 def default_documents_dir() -> str:
@@ -140,6 +148,81 @@ class SettingsEditor(QWidget):
         self.project.dirty = True
 
 
+class SystemTab(QWidget):
+    """システム変数の編集＋永続データ（エンディング解放回数など）の確認/リセット。"""
+
+    changed = Signal()
+
+    def __init__(self, project: Project):
+        super().__init__()
+        self.project = project
+        from PySide6.QtWidgets import QGroupBox, QTextEdit, QSplitter
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+
+        self.editor = SystemVarEditor(project)
+        self.editor.changed.connect(self.changed)
+        lay.addWidget(self.editor, 1)
+
+        box = QGroupBox("システムデータ（プレイをまたいで共有・永続）")
+        bl = QVBoxLayout(box)
+        info = QLabel("各エンディングの解放回数や、システム変数の現在値です"
+                      "（テストプレイで更新されます）。")
+        info.setStyleSheet("color:#aab;")
+        bl.addWidget(info)
+        self.data_view = QTextEdit()
+        self.data_view.setReadOnly(True)
+        self.data_view.setMaximumHeight(160)
+        bl.addWidget(self.data_view)
+        row = QHBoxLayout()
+        refresh = QPushButton("🔄 更新")
+        refresh.clicked.connect(self.refresh_data)
+        reset = QPushButton("システムデータをリセット")
+        reset.clicked.connect(self._reset)
+        row.addWidget(refresh)
+        row.addWidget(reset)
+        row.addStretch()
+        bl.addLayout(row)
+        lay.addWidget(box)
+
+        self.refresh_data()
+
+    def refresh_data(self):
+        store = SystemStore(system_path_for(self.project))
+        lines = ["■ エンディング解放回数"]
+        endings = store.data.get("endings", {})
+        if not endings:
+            lines.append("  （まだありません）")
+        for e in self.project.endings:
+            cnt = endings.get(e["id"], 0)
+            lock = "🔒" if e.get("hidden") else ""
+            mark = "✅" if cnt > 0 else "—"
+            lines.append(f'  {mark} {lock}{e["name"]}: {cnt} 回')
+        total = sum(1 for e in self.project.endings if endings.get(e["id"], 0) > 0)
+        lines.append(f'  合計: {total} / {len(self.project.endings)} 種類 解放')
+        lines.append("")
+        lines.append("■ システム変数の現在値")
+        svars = store.data.get("vars", {})
+        if not self.project.system_vars:
+            lines.append("  （未定義）")
+        for v in self.project.system_vars:
+            lines.append(f'  {v["name"]} = {svars.get(v["name"], v.get("initial"))}')
+        self.data_view.setPlainText("\n".join(lines))
+
+    def _reset(self):
+        if QMessageBox.question(
+                self, "システムデータのリセット",
+                "エンディング解放回数とシステム変数の保存値をすべて消去します。\n"
+                "よろしいですか？") != QMessageBox.Yes:
+            return
+        SystemStore(system_path_for(self.project)).reset()
+        self.refresh_data()
+
+    def reload(self):
+        self.editor.reload()
+        self.refresh_data()
+
+
 class MainWindow(QMainWindow):
     def __init__(self, project: Project = None):
         super().__init__()
@@ -176,6 +259,7 @@ class MainWindow(QMainWindow):
         self.bgm_editor = BgmEditor(self.project)
         self.se_editor = SeEditor(self.project)
         self.ending_editor = EndingEditor(self.project)
+        self.system_tab = SystemTab(self.project)
         self.layout_editor = LayoutEditor(self.project)
         self.flowchart_tab = FlowchartTab(self.project)
         self.settings_editor = SettingsEditor(self.project)
@@ -186,6 +270,7 @@ class MainWindow(QMainWindow):
             ("🧑 キャラ・表情", self.character_editor),
             ("🎒 アイテム", self.item_editor),
             ("🔢 変数", self.variable_editor),
+            ("🌐 システム変数", self.system_tab),
             ("📊 ゲージ", self.gauge_editor),
             ("🖼 背景", self.background_editor),
             ("🌅 CG", self.cg_editor),
@@ -201,6 +286,7 @@ class MainWindow(QMainWindow):
         # シーン変更時に設定タブの開始シーン候補を更新
         self.scene_editor.changed.connect(self._on_project_changed)
         self.scene_editor.testFromScene.connect(self.play_from)
+        self.system_tab.changed.connect(self._on_project_changed)
         self.layout_editor.changed.connect(self._on_project_changed)
         self.flowchart_tab.sceneOpenRequested.connect(self._open_scene_from_flowchart)
         self.tabs.currentChanged.connect(self._on_tab_changed)
@@ -217,6 +303,9 @@ class MainWindow(QMainWindow):
         # フローチャートは最新のシーン構成で再描画
         elif cur is self.flowchart_tab:
             self.flowchart_tab.rebuild()
+        # システムタブは永続データを読み直す
+        elif cur is self.system_tab:
+            self.system_tab.refresh_data()
 
     def _on_project_changed(self):
         self.project.dirty = True
@@ -289,7 +378,8 @@ class MainWindow(QMainWindow):
                                     "先にシーンを1つ以上作成してください。")
             return
         saves = SaveManager(save_path_for(self.project))
-        self.player = PlayerWidget(self.project, saves)
+        system = SystemStore(system_path_for(self.project))
+        self.player = PlayerWidget(self.project, saves, system)
         self.player.exited.connect(self._exit_player)
         self.stack.addWidget(self.player)
         self.stack.setCurrentWidget(self.player)
@@ -390,6 +480,7 @@ class MainWindow(QMainWindow):
         # プレイ中に状態が変わることは無いが、念のためUIを最新化
         self.scene_editor.reload()
         self.settings_editor.reload()
+        self.system_tab.refresh_data()   # 解放回数などを反映
 
     # ------------------------------------------------------------------
     # プロジェクト操作

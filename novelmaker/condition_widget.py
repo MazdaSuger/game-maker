@@ -16,7 +16,8 @@ from .model import Project, new_term
 NUM_OPS = [("==", "="), ("!=", "≠"), (">", ">"), (">=", "≥"),
            ("<", "<"), ("<=", "≤")]
 ITEM_OPS = [("has", "所持している"), ("notHas", "所持していない")]
-KINDS = [("var", "変数"), ("gauge", "ゲージ"), ("item", "アイテム")]
+KINDS = [("var", "変数"), ("gauge", "ゲージ"), ("item", "アイテム"),
+         ("ending", "エンディング到達回数")]
 
 
 class _TermRow(QWidget):
@@ -68,11 +69,12 @@ class _TermRow(QWidget):
         cb.setCurrentIndex(0)
 
     def _kind_changed(self):
-        self.term["kind"] = self.kind_cb.currentData()
+        k = self.kind_cb.currentData()
+        self.term["kind"] = k
         # kind 変更時は ref/op/value を初期化
         self.term["ref"] = ""
-        self.term["op"] = "has" if self.term["kind"] == "item" else "=="
-        self.term["value"] = ""
+        self.term["op"] = "has" if k == "item" else (">=" if k == "ending" else "==")
+        self.term["value"] = "1" if k == "ending" else ""
         self._rebuild_for_kind()
         self._sync()
 
@@ -84,12 +86,18 @@ class _TermRow(QWidget):
         if kind == "var":
             for v in self.project.variables:
                 self.ref_cb.addItem(v["name"], v["name"])
+            for v in self.project.system_vars:   # システム変数も参照可
+                self.ref_cb.addItem(f'{v["name"]} [SYS]', v["name"])
         elif kind == "gauge":
             for g in self.project.gauges:
                 self.ref_cb.addItem(g["name"], g["id"])
         elif kind == "item":
             for it in self.project.items:
                 self.ref_cb.addItem(it["name"], it["id"])
+        elif kind == "ending":
+            for e in self.project.endings:
+                lock = "🔒" if e.get("hidden") else ""
+                self.ref_cb.addItem(f'{lock}{e["name"]}', e["id"])
         self._set_combo(self.ref_cb, self.term.get("ref", ""))
         self.ref_cb.blockSignals(False)
 

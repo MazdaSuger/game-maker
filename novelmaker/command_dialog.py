@@ -242,9 +242,12 @@ class CommandDialog(QDialog):
 
     def _form_setVar(self):
         f = QFormLayout()
-        self.var_cb = _combo([(v["name"], f'{v["name"]} ({v["type"]})')
-                              for v in self.project.variables],
-                             self.cmd.get("varName", ""), none_label="（変数を選択）")
+        items = [(v["name"], f'{v["name"]} ({v["type"]})')
+                 for v in self.project.variables]
+        items += [(v["name"], f'{v["name"]} ({v["type"]}) [システム]')
+                  for v in self.project.system_vars]
+        self.var_cb = _combo(items, self.cmd.get("varName", ""),
+                             none_label="（変数を選択）")
         self.op_cb = _combo(VAR_OPS, self.cmd.get("op", "set"))
         self.value_edit = QLineEdit(str(self.cmd.get("value", "")))
         f.addRow("変数:", self.var_cb)
