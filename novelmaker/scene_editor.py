@@ -11,7 +11,7 @@ import copy
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QListWidget, QListWidgetItem,
     QPushButton, QLabel, QMenu, QInputDialog, QMessageBox, QToolButton,
-    QFrame, QDialog,
+    QFrame, QDialog, QAbstractItemView,
 )
 from PySide6.QtCore import Qt, Signal
 
@@ -37,8 +37,10 @@ class SceneEditor(QWidget):
         left = QVBoxLayout()
         left.addWidget(QLabel("<b>シーン一覧</b>"))
         self.scene_list = QListWidget()
+        self.scene_list.setDragDropMode(QAbstractItemView.InternalMove)
         self.scene_list.currentRowChanged.connect(self._on_scene_selected)
         self.scene_list.itemDoubleClicked.connect(lambda _: self._rename_scene())
+        self.scene_list.model().rowsMoved.connect(self._scenes_reordered)
         left.addWidget(self.scene_list, 1)
 
         srow = QHBoxLayout()
@@ -73,8 +75,10 @@ class SceneEditor(QWidget):
         right.addWidget(self.scene_title)
 
         self.cmd_list = QListWidget()
+        self.cmd_list.setDragDropMode(QAbstractItemView.InternalMove)
         self.cmd_list.itemDoubleClicked.connect(lambda _: self._edit_command())
         self.cmd_list.setAlternatingRowColors(True)
+        self.cmd_list.model().rowsMoved.connect(self._commands_reordered)
         right.addWidget(self.cmd_list, 1)
 
         crow = QHBoxLayout()
@@ -113,7 +117,9 @@ class SceneEditor(QWidget):
         start = self.project.meta.get("startScene", "")
         for s in self.project.scenes:
             mark = "⭐ " if s["id"] == start else ""
-            self.scene_list.addItem(f'{mark}{s["name"]}')
+            item = QListWidgetItem(f'{mark}{s["name"]}')
+            item.setData(Qt.UserRole, s["id"])
+            self.scene_list.addItem(item)
         self.scene_list.blockSignals(False)
         if self.project.scenes:
             self.scene_list.setCurrentRow(0)
@@ -137,8 +143,29 @@ class SceneEditor(QWidget):
     # ------------------------------------------------------------------
     # シーン操作
     # ------------------------------------------------------------------
+    def _scenes_reordered(self, *args):
+        """シーンをドラッグで並べ替えたら project.scenes も並べ替える。"""
+        ids = [self.scene_list.item(i).data(Qt.UserRole)
+               for i in range(self.scene_list.count())]
+        by_id = {s["id"]: s for s in self.project.scenes}
+        self.project.scenes[:] = [by_id[i] for i in ids if i in by_id]
+        self._emit_changed()
+
+    def _commands_reordered(self, *args):
+        """コンポーネントをドラッグで並べ替えたら commands も並べ替える。"""
+        if not self.current_scene:
+            return
+        ids = [self.cmd_list.item(i).data(Qt.UserRole)
+               for i in range(self.cmd_list.count())]
+        by_id = {c["id"]: c for c in self.current_scene["commands"]}
+        self.current_scene["commands"][:] = [by_id[i] for i in ids if i in by_id]
+        self._emit_changed()
+
     def _on_scene_selected(self, row: int):
-        if 0 <= row < len(self.project.scenes):
+        item = self.scene_list.item(row)
+        if item is not None:
+            self.current_scene = self.project.scene(item.data(Qt.UserRole))
+        elif 0 <= row < len(self.project.scenes):
             self.current_scene = self.project.scenes[row]
         else:
             self.current_scene = None
@@ -215,10 +242,13 @@ class SceneEditor(QWidget):
             self.scene_title.setText("<b>コマンド列</b>")
             return
         self.scene_title.setText(f'<b>コマンド列</b> — {self.current_scene["name"]}')
+        self.cmd_list.blockSignals(True)
         for cmd in self.current_scene.get("commands", []):
             icon = COMMAND_ICONS.get(cmd["type"], "•")
             item = QListWidgetItem(f'{icon}  {describe_command(cmd, self.project)}')
+            item.setData(Qt.UserRole, cmd["id"])
             self.cmd_list.addItem(item)
+        self.cmd_list.blockSignals(False)
 
     def _current_cmd_index(self) -> int:
         return self.cmd_list.currentRow()

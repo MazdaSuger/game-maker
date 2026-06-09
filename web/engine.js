@@ -231,6 +231,20 @@
     this.state.cmd_index = 0;
   };
 
+  Runtime.prototype._findLabel = function (name) {
+    if (!name) return null;
+    const cur = this.scene(this.state.scene_id);
+    const scenes = (cur ? [cur] : []).concat(
+      (this.project.scenes || []).filter((s) => s !== cur));
+    for (const s of scenes) {
+      const cmds = s.commands || [];
+      for (let i = 0; i < cmds.length; i++) {
+        if (cmds[i].type === "label" && cmds[i].name === name) return [s.id, i];
+      }
+    }
+    return null;
+  };
+
   Runtime.prototype._run = function () {
     let guard = 0;
     this._sfx = [];
@@ -370,6 +384,14 @@
     }
     if (t === "jump") {
       if (cmd.targetScene) { this._goto(cmd.targetScene); this._jumped = true; }
+      return null;
+    }
+    if (t === "label") return null;   // 位置マーカー
+    if (t === "labelJump") {
+      if (evaluateCondition(cmd.condition, st)) {
+        const loc = this._findLabel(cmd.target || "");
+        if (loc) { st.scene_id = loc[0]; st.cmd_index = loc[1]; this._jumped = true; }
+      }
       return null;
     }
     if (t === "ending") {

@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QFormLayout, QListWidget,
     QListWidgetItem, QPushButton, QLabel, QLineEdit, QComboBox, QCheckBox,
     QSpinBox, QPlainTextEdit, QColorDialog, QFileDialog, QFrame, QGroupBox,
+    QAbstractItemView,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
@@ -37,7 +38,9 @@ class ListEditor(QWidget):
         left = QVBoxLayout()
         left.addWidget(QLabel(f"<b>{self.title}一覧</b>"))
         self.list = QListWidget()
+        self.list.setDragDropMode(QAbstractItemView.InternalMove)
         self.list.currentRowChanged.connect(self._on_select)
+        self.list.model().rowsMoved.connect(self._reordered)
         left.addWidget(self.list, 1)
         brow = QHBoxLayout()
         for text, slot in [("＋追加", self._add), ("複製", self._dup),
@@ -80,13 +83,23 @@ class ListEditor(QWidget):
         self.list.blockSignals(True)
         self.list.clear()
         for e in self.entries():
-            self.list.addItem(self.label_for(e))
+            item = QListWidgetItem(self.label_for(e))
+            item.setData(Qt.UserRole, e.get("id"))
+            self.list.addItem(item)
         self.list.blockSignals(False)
         if self.entries():
             self.list.setCurrentRow(0)
         else:
             self.current = None
             self._clear_form()
+
+    def _reordered(self, *args):
+        """ドラッグ並び替えに合わせて、元のリストも並べ替える。"""
+        ids = [self.list.item(i).data(Qt.UserRole) for i in range(self.list.count())]
+        by_id = {e.get("id"): e for e in self.entries()}
+        self.entries()[:] = [by_id[i] for i in ids if i in by_id]
+        self.project.dirty = True
+        self.changed.emit()
 
     def _on_select(self, row: int):
         entries = self.entries()

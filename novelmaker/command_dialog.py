@@ -17,7 +17,7 @@ from PySide6.QtCore import Qt
 
 from .model import (
     Project, COMMAND_LABELS, COMMAND_ICONS, VAR_OPS, GAUGE_OPS,
-    empty_condition, uid, NO_SPRITE, SAY_POSITIONS, COMP_TARGETS,
+    empty_condition, uid, NO_SPRITE, SAY_POSITIONS, COMP_TARGETS, all_labels,
 )
 from .condition_widget import ConditionWidget
 
@@ -319,6 +319,37 @@ class CommandDialog(QDialog):
         f.addRow("移動先シーン:", self.scene_cb)
         self._add_form(f)
 
+    def _form_label(self):
+        f = QFormLayout()
+        self.name_edit = QLineEdit(self.cmd.get("name", ""))
+        self.name_edit.setPlaceholderText("例: 分岐A、ループ開始 など")
+        f.addRow("フラグ地点名:", self.name_edit)
+        hint = QLabel("※ シナリオ内に目印（位置）を作ります。\n"
+                      "　「フラグへジャンプ」でここに飛べます。")
+        hint.setStyleSheet("color:#888;")
+        f.addRow("", hint)
+        self._add_form(f)
+
+    def _form_labelJump(self):
+        f = QFormLayout()
+        self.target_combo = QComboBox()
+        self.target_combo.setEditable(True)
+        for name in all_labels(self.project):
+            self.target_combo.addItem(name)
+        self.target_combo.setCurrentText(self.cmd.get("target", ""))
+        f.addRow("ジャンプ先フラグ:", self.target_combo)
+        hint = QLabel("※ 同名の「フラグ地点」へジャンプします。\n"
+                      "　現在のシーンを優先し、無ければ全シーンから探します。")
+        hint.setStyleSheet("color:#888;")
+        f.addRow("", hint)
+        self._add_form(f)
+        # 任意の条件（満たすときだけジャンプ＝条件付きループ/分岐が可能）
+        self.cmd.setdefault("condition", empty_condition())
+        box = QGroupBox("ジャンプ条件（空＝常にジャンプ）")
+        bl = QVBoxLayout(box)
+        bl.addWidget(ConditionWidget(self.cmd["condition"], self.project))
+        self.form_host.addWidget(box)
+
     def _form_ending(self):
         f = QFormLayout()
         self.end_cb = _combo([(e["id"], ("🔒 " if e.get("hidden") else "") + e["name"])
@@ -458,6 +489,10 @@ class CommandDialog(QDialog):
             self.cmd["notify"] = self.notify_cb.isChecked()
         elif t == "jump":
             self.cmd["targetScene"] = self.scene_cb.currentData() or ""
+        elif t == "label":
+            self.cmd["name"] = self.name_edit.text().strip()
+        elif t == "labelJump":
+            self.cmd["target"] = self.target_combo.currentText().strip()
         elif t == "ending":
             self.cmd["endingId"] = self.end_cb.currentData() or ""
         elif t == "if":

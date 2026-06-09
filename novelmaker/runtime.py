@@ -492,6 +492,17 @@ class Runtime:
                 cmd["_jumped"] = True
             return None
 
+        if t == "label":
+            return None  # 位置マーカー（何もしない）
+
+        if t == "labelJump":
+            if evaluate_condition(cmd.get("condition"), self.state):
+                loc = self._find_label(cmd.get("target", ""))
+                if loc is not None:
+                    self.state.scene_id, self.state.cmd_index = loc
+                    cmd["_jumped"] = True
+            return None
+
         if t == "ending":
             end = self.project.ending(cmd.get("endingId", ""))
             if end:
@@ -536,6 +547,18 @@ class Runtime:
     def _goto_scene(self, sid: str):
         self.state.scene_id = sid
         self.state.cmd_index = 0
+
+    def _find_label(self, name: str):
+        """フラグ地点(label)を探す。まず現在シーン、無ければ全シーン。"""
+        if not name:
+            return None
+        cur = self.project.scene(self.state.scene_id)
+        scenes = ([cur] if cur else []) + [s for s in self.project.scenes if s is not cur]
+        for s in scenes:
+            for i, c in enumerate(s.get("commands", [])):
+                if c.get("type") == "label" and c.get("name") == name:
+                    return (s["id"], i)
+        return None
 
     def _interp(self, text: str) -> str:
         """テキスト内の {変数名} を現在値で置換する（ローカル→システム）。"""

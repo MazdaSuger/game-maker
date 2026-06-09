@@ -45,6 +45,8 @@ COMMAND_TYPES = [
     ("choice",    "選択肢分岐",   "🔀"),
     ("if",        "条件分岐",     "❓"),
     ("jump",      "シーン移動",   "➡"),
+    ("label",     "フラグ地点",   "🚩"),
+    ("labelJump", "フラグへジャンプ", "🎯"),
     ("endroll",   "エンドロール", "🎞"),
     ("ending",    "エンディング", "🏁"),
 ]
@@ -202,9 +204,24 @@ def new_command(ctype: str) -> dict:
         base.update(condition=empty_condition(), targetTrue="", targetFalse="")
     elif ctype == "jump":
         base.update(targetScene="")
+    elif ctype == "label":
+        base.update(name="")
+    elif ctype == "labelJump":
+        base.update(target="", condition=empty_condition())
     elif ctype == "ending":
         base.update(endingId="")
     return base
+
+
+def all_labels(project: "Project") -> list:
+    """プロジェクト全体のフラグ地点（label）名を集める。"""
+    names = []
+    for s in project.scenes:
+        for c in s.get("commands", []):
+            if c.get("type") == "label" and c.get("name"):
+                if c["name"] not in names:
+                    names.append(c["name"])
+    return names
 
 
 def migrate_project(data: dict) -> dict:
@@ -612,6 +629,12 @@ def describe_command(cmd: dict, project: "Project") -> str:
         return f"条件分岐（{n}件の条件）"
     if t == "jump":
         return f"シーン移動 → {project.scene_name(cmd.get('targetScene',''))}"
+    if t == "label":
+        return f"🚩 フラグ地点: {cmd.get('name','') or '（未設定）'}"
+    if t == "labelJump":
+        n = len(cmd.get("condition", {}).get("terms", []))
+        cond = f"（条件{n}件）" if n else ""
+        return f"フラグへジャンプ → {cmd.get('target','') or '（未設定）'}{cond}"
     if t == "ending":
         e = project.ending(cmd.get("endingId", ""))
         lock = "🔒" if (e and e.get("hidden")) else ""
