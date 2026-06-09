@@ -152,6 +152,8 @@ class GameState:
         self.bg_id: str = ""
         self.blackout: bool = False
         self.blackout_hide_ui: bool = False   # 暗転時にUIも消すか
+        # コンポーネント表示上書き（key→True=消去/False=表示）。空はレイアウト設定に従う
+        self.comp_override: dict[str, bool] = {}
         self.cg_id: str = ""                  # 表示中のCG（""=なし）
         # 立ち絵：最大3人（{"left":{"charId","exprId"}, ...}）
         self.sprites: dict[str, dict] = {}
@@ -170,6 +172,7 @@ class GameState:
             "bg_id": self.bg_id,
             "blackout": self.blackout,
             "blackout_hide_ui": self.blackout_hide_ui,
+            "comp_override": self.comp_override,
             "cg_id": self.cg_id,
             "sprites": self.sprites,
             "bgm_id": self.bgm_id,
@@ -188,6 +191,7 @@ class GameState:
         s.bg_id = d.get("bg_id", "")
         s.blackout = d.get("blackout", False)
         s.blackout_hide_ui = d.get("blackout_hide_ui", False)
+        s.comp_override = dict(d.get("comp_override", {}))
         s.cg_id = d.get("cg_id", "")
         # 立ち絵：新形式 sprites、無ければ旧 char_id/expr_id から移行
         if "sprites" in d and isinstance(d["sprites"], dict):
@@ -395,6 +399,12 @@ class Runtime:
             on = (cmd.get("mode", "on") == "on")
             self.state.blackout = on
             self.state.blackout_hide_ui = on and bool(cmd.get("hideUi", False))
+            return None
+
+        if t == "compVis":
+            target = cmd.get("target", "")
+            if target:
+                self.state.comp_override[target] = (cmd.get("action") == "hide")
             return None
 
         if t == "bgm":

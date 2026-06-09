@@ -17,7 +17,7 @@ from PySide6.QtCore import Qt
 
 from .model import (
     Project, COMMAND_LABELS, COMMAND_ICONS, VAR_OPS, GAUGE_OPS,
-    empty_condition, uid, NO_SPRITE, SAY_POSITIONS,
+    empty_condition, uid, NO_SPRITE, SAY_POSITIONS, COMP_TARGETS,
 )
 from .condition_widget import ConditionWidget
 
@@ -161,6 +161,19 @@ class CommandDialog(QDialog):
         self.bg_cb = _combo([(b["id"], b["name"]) for b in self.project.backgrounds],
                             self.cmd.get("bgId", ""), none_label="（変更なし）")
         f.addRow("背景:", self.bg_cb)
+        self._add_form(f)
+
+    def _form_compVis(self):
+        f = QFormLayout()
+        self.target_cb = _combo(list(COMP_TARGETS), self.cmd.get("target", "message"))
+        self.action_cb = _combo([("hide", "消去する（隠す）"), ("show", "表示する")],
+                                self.cmd.get("action", "hide"))
+        f.addRow("コンポーネント:", self.target_cb)
+        f.addRow("動作:", self.action_cb)
+        hint = QLabel("※ シナリオ途中で各コンポーネントを出し入れします。\n"
+                      "　レイアウトの「非表示」より、こちらの指定が優先されます。")
+        hint.setStyleSheet("color:#888;")
+        f.addRow("", hint)
         self._add_form(f)
 
     def _form_blackout(self):
@@ -411,6 +424,9 @@ class CommandDialog(QDialog):
         elif t == "blackout":
             self.cmd["mode"] = self.mode_cb.currentData()
             self.cmd["hideUi"] = self.hideui_cb.isChecked()
+        elif t == "compVis":
+            self.cmd["target"] = self.target_cb.currentData() or "message"
+            self.cmd["action"] = self.action_cb.currentData()
         elif t == "bgm":
             self.cmd["action"] = self.action_cb.currentData()
             self.cmd["bgmId"] = self.bgm_cb.currentData() or ""

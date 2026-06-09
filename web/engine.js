@@ -139,8 +139,8 @@
     return {
       variables: {}, gauges: {}, items: [],
       scene_id: "", cmd_index: 0,
-      bg_id: "", blackout: false, blackout_hide_ui: false, cg_id: "",
-      sprites: {}, bgm_id: "", bgm_fade: 0, discovered_endings: [],
+      bg_id: "", blackout: false, blackout_hide_ui: false, comp_override: {},
+      cg_id: "", sprites: {}, bgm_id: "", bgm_fade: 0, discovered_endings: [],
     };
   }
 
@@ -310,6 +310,10 @@
       const on = (cmd.mode || "on") === "on";
       st.blackout = on;
       st.blackout_hide_ui = on && !!cmd.hideUi;
+      return null;
+    }
+    if (t === "compVis") {
+      if (cmd.target) st.comp_override[cmd.target] = (cmd.action === "hide");
       return null;
     }
     if (t === "bgm") {

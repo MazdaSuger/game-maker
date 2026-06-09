@@ -168,8 +168,7 @@
     const badge = $("ending-badge");
     if (ev.hidden) { badge.textContent = "🔒 裏エンディング 🔒"; badge.style.color = "#ffd56b"; }
     else { badge.textContent = "★ ENDING ★"; badge.style.color = "#9fe3ff"; }
-    $("ending-name").textContent =
-      (ev.name || "") + (ev.count > 1 ? `　（${ev.count}回目）` : "");
+    $("ending-name").textContent = ev.name || "";
     $("ending-desc").textContent = ev.desc || "";
     showOverlay("ov-ending");
   }
@@ -558,6 +557,8 @@
   function compHidden(key) {
     const st = rt.state;
     if (st.blackout && st.blackout_hide_ui) return true;  // 暗転(UIも消す)
+    const ov = st.comp_override ? st.comp_override[key] : undefined;
+    if (ov !== undefined) return ov;                       // 表示/消去コマンド
     return !!layoutOf(key).hidden;
   }
 

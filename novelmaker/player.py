@@ -415,11 +415,14 @@ class PlayerWidget(QWidget):
     def _comp_hidden(self, key: str) -> bool:
         """コンポーネントを隠すか。
 
-        レイアウトの「非表示」指定、または暗転(UIも消す)中なら True。
+        優先度: 暗転(UIも消す) > シナリオの表示/消去コマンド > レイアウトの非表示。
         """
         st = self.runtime.state
         if st.blackout and st.blackout_hide_ui:
             return True
+        ov = st.comp_override.get(key)
+        if ov is not None:
+            return ov
         return bool(merged_layout(self.project).get(key, {}).get("hidden", False))
 
     def _present(self, ev: dict):
@@ -618,11 +621,7 @@ class PlayerWidget(QWidget):
         self.ending_badge.setText("🔒 裏エンディング 🔒" if hidden else "★ ENDING ★")
         self.ending_badge.setStyleSheet(
             "color:#ffd56b;" if hidden else "color:#9fe3ff;")
-        cnt = ev.get("count", 0)
-        name = ev.get("name", "")
-        if cnt and cnt > 1:
-            name += f'　（{cnt}回目）'
-        self.ending_name.setText(name)
+        self.ending_name.setText(ev.get("name", ""))
         self.ending_desc.setText(ev.get("desc", ""))
         self.ending_overlay.show()
         self._raise_overlays()

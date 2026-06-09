@@ -35,6 +35,7 @@ COMMAND_TYPES = [
     ("bg",        "背景変更",     "🖼"),
     ("cg",        "CG表示",       "🌅"),
     ("blackout",  "暗転",         "🌑"),
+    ("compVis",   "コンポーネント表示・消去", "👁"),
     ("bgm",       "BGM",          "🎵"),
     ("se",        "効果音(SE)",   "🔊"),
     ("nameInput", "名前入力",     "🔤"),
@@ -57,6 +58,15 @@ NO_SPRITE = "__none__"
 # 立ち絵の配置位置（1画面に最大3人）
 SAY_POSITIONS = [("left", "左"), ("center", "中央"), ("right", "右")]
 SPRITE_SLOTS = ["left", "center", "right"]
+
+# 表示/消去できるコンポーネント（compVis コマンド・レイアウトの非表示で共通）
+COMP_TARGETS = [
+    ("message", "セリフ枠"),
+    ("sprite", "立ち絵"),
+    ("gauges", "ゲージ"),
+    ("items", "アイテムボタン"),
+    ("menu", "メニュー"),
+]
 
 # 変数操作の演算子
 VAR_OPS = [("set", "代入 ="), ("add", "加算 +="), ("sub", "減算 -="),
@@ -150,6 +160,8 @@ def new_command(ctype: str) -> dict:
         base.update(bgId="")
     elif ctype == "blackout":
         base.update(mode="on", hideUi=False)  # on=暗転 / off=解除, hideUi=UIも消す
+    elif ctype == "compVis":
+        base.update(target="message", action="hide")  # show / hide
     elif ctype == "bgm":
         base.update(action="play", bgmId="", loop=True, fadeMs=0)
     elif ctype == "endroll":
@@ -530,6 +542,10 @@ def describe_command(cmd: dict, project: "Project") -> str:
         if cmd.get("mode") == "on":
             return "暗転する（UIも消す）" if cmd.get("hideUi") else "暗転する"
         return "暗転を解除"
+    if t == "compVis":
+        tname = dict(COMP_TARGETS).get(cmd.get("target", ""), "（未設定）")
+        act = "表示" if cmd.get("action") == "show" else "消去"
+        return f"{tname} を {act}"
     if t == "bgm":
         fade = cmd.get("fadeMs", 0)
         fade_s = f"（フェード{fade}ms）" if fade else ""
