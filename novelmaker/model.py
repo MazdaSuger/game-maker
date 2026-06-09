@@ -82,17 +82,26 @@ GAUGE_OPS = [("set", "代入 ="), ("add", "加算 +="), ("sub", "減算 -=")]
 DEFAULT_LAYOUT = {
     "message": {"x": 4.0, "y": 72.0, "w": 92.0, "h": 26.0},
     "choices": {"x": 50.0, "y": 42.0},   # 中央アンカー
-    "sprite":  {"x": 50.0, "y": 99.0, "scale": 80.0},  # 中央下アンカー
+    # 立ち絵は左/中/右の3スロットを個別に配置（中央下アンカー）
+    "spriteLeft":   {"x": 25.0, "y": 99.0, "scale": 80.0},
+    "spriteCenter": {"x": 50.0, "y": 99.0, "scale": 80.0},
+    "spriteRight":  {"x": 75.0, "y": 99.0, "scale": 80.0},
+    "sprite":  {},                       # 立ち絵の非表示フラグ用
     "gauges":  {"x": 1.2, "y": 2.0},     # 左上
     "items":   {"x": 94.0, "y": 2.0},    # 左上座標（右上付近）
     "menu":    {"x": 63.0, "y": 9.0},
     "title":   {"x": 50.0, "y": 38.0},   # タイトルのボタン群中央
 }
 
+# 立ち絵スロット → レイアウトキー
+SPRITE_POS_KEY = {"left": "spriteLeft", "center": "spriteCenter", "right": "spriteRight"}
+
 # レイアウト編集対象（id, ラベル, 種別）
 LAYOUT_ELEMENTS = [
     ("message", "セリフ枠", "box"),
-    ("sprite",  "立ち絵",   "sprite"),
+    ("spriteLeft",   "立ち絵(左)", "sprite"),
+    ("spriteCenter", "立ち絵(中)", "sprite"),
+    ("spriteRight",  "立ち絵(右)", "sprite"),
     ("choices", "選択肢",   "point"),
     ("gauges",  "ゲージ",   "point"),
     ("items",   "アイテム", "point"),
@@ -105,6 +114,8 @@ DEFAULT_THEME = {
     "choiceButtonImage": "",  # 選択肢ボタンの背景画像
     "titleButtonImage": "",   # タイトルボタンの背景画像
     "itemsButtonImage": "",   # アイテムボタンの画像
+    "nameBoxImage": "",       # 名前入力の枠（コンポーネント枠）背景
+    "nameFieldImage": "",     # 名前入力の入力欄背景
 }
 
 THEME_FIELDS = [
@@ -112,6 +123,8 @@ THEME_FIELDS = [
     ("choiceButtonImage", "選択肢ボタンの背景"),
     ("titleButtonImage", "タイトルボタンの背景"),
     ("itemsButtonImage", "アイテムボタンの画像"),
+    ("nameBoxImage", "名前入力の枠"),
+    ("nameFieldImage", "名前入力の入力欄"),
 ]
 
 
@@ -207,6 +220,17 @@ def migrate_project(data: dict) -> dict:
                 if cmd.get("exprId") == NO_SPRITE:
                     cmd["exprId"] = ""          # 立ち絵を表示する側に倒す
                 cmd.setdefault("hideSprite", False)
+    # 旧：単一 "sprite" レイアウト → 左/中/右の3スロットへ
+    lay = data.get("layout")
+    if isinstance(lay, dict):
+        s = lay.get("sprite")
+        if isinstance(s, dict) and ("x" in s or "scale" in s) and "spriteCenter" not in lay:
+            cx = float(s.get("x", 50)); y = float(s.get("y", 99)); sc = float(s.get("scale", 80))
+            lay.setdefault("spriteCenter", {"x": cx, "y": y, "scale": sc})
+            lay.setdefault("spriteLeft", {"x": max(8.0, cx - 25), "y": y, "scale": sc})
+            lay.setdefault("spriteRight", {"x": min(92.0, cx + 25), "y": y, "scale": sc})
+            # "sprite" は非表示フラグだけ残す
+            lay["sprite"] = {k: v for k, v in s.items() if k == "hidden"}
     return data
 
 
@@ -371,6 +395,8 @@ def default_project() -> dict:
             "startScene": s_start,
             "titleBg": bg_room,     # タイトル画面の背景
             "titleBgm": bgm_main,   # タイトル画面のBGM
+            "font": "",             # ゲーム内フォント（フォント名）
+            "fontPath": "",         # 取り込みフォントファイル（任意）
         },
         "variables": [
             {"id": uid("var"), "name": "playerName", "type": "string", "initial": "主人公"},

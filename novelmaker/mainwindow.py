@@ -82,12 +82,35 @@ class SettingsEditor(QWidget):
         self.titlebgm_cb = QComboBox()
         self.titlebgm_cb.currentIndexChanged.connect(self._set_titlebgm)
 
+        # フォント
+        from PySide6.QtWidgets import QFontComboBox
+        from PySide6.QtGui import QFont
+        from .editors import FilePicker
+        self.font_cb = QFontComboBox()
+        cur_font = project.meta.get("font", "")
+        if cur_font:
+            self.font_cb.setCurrentFont(QFont(cur_font))
+        self.font_cb.currentFontChanged.connect(
+            lambda fnt: (project.meta.__setitem__("font", fnt.family()),
+                         setattr(project, "dirty", True)))
+        self.font_picker = FilePicker(
+            project.meta.get("fontPath", ""),
+            lambda t: (project.meta.__setitem__("fontPath", t),
+                       setattr(project, "dirty", True)),
+            "フォント (*.ttf *.otf *.ttc *.woff *.woff2)")
+
         f.addRow("タイトル:", self.title_edit)
         f.addRow("作者:", self.author_edit)
         f.addRow("開始シーン:", self.start_cb)
         f.addRow("タイトル画面の背景:", self.titlebg_cb)
         f.addRow("タイトル画面のBGM:", self.titlebgm_cb)
+        f.addRow("フォント:", self.font_cb)
+        f.addRow("取り込みフォント(任意):", self.font_picker)
+        fhint = QLabel("※ フォントはゲーム画面（プレイ／ブラウザ書き出し）に適用されます。\n"
+                       "　取り込みフォント(.ttf/.otf)を指定すると、その書体が優先されます。")
+        fhint.setStyleSheet("color:#888;")
         lay.addLayout(f)
+        lay.addWidget(fhint)
 
         info = QLabel(
             f"<p style='color:#888'>{APP_NAME} v{__version__}<br>"

@@ -189,10 +189,9 @@
       elBg.style.backgroundColor = "#101018";
     }
 
-    // 立ち絵（最大3人：左/中央/右）
+    // 立ち絵（最大3人：左/中央/右、スロットごとに位置・スケール）
     elChar.innerHTML = "";
     if (!st.blackout && !compHidden("sprite") && st.sprites) {
-      const sp = layoutOf("sprite");
       ["left", "center", "right"].forEach((pos) => {
         const entry = st.sprites[pos];
         if (!entry) return;
@@ -200,9 +199,10 @@
         if (!ch || ch.showSprite === false) return;
         let ex = (ch.expressions || []).find((e) => e.id === entry.exprId);
         if (!ex && (ch.expressions || []).length) ex = ch.expressions[0];
+        const sp = layoutOf(SPRITE_POS_KEY[pos]);
         const el = document.createElement("div");
         el.className = "sprite";
-        el.style.left = spriteX(pos, sp.x) + "%";
+        el.style.left = sp.x + "%";
         el.style.bottom = (100 - sp.y) + "%";
         el.style.height = sp.scale + "%";
         if (ex && ex.image) {
@@ -543,11 +543,14 @@
   const DEFAULT_LAYOUT = {
     message: { x: 4, y: 72, w: 92, h: 26 },
     choices: { x: 50, y: 42 },
-    sprite:  { x: 50, y: 99, scale: 80 },
+    spriteLeft:   { x: 25, y: 99, scale: 80 },
+    spriteCenter: { x: 50, y: 99, scale: 80 },
+    spriteRight:  { x: 75, y: 99, scale: 80 },
     gauges:  { x: 1.2, y: 2 },
     items:   { x: 94, y: 2 },
     menu:    { x: 63, y: 9 },
   };
+  const SPRITE_POS_KEY = { left: "spriteLeft", center: "spriteCenter", right: "spriteRight" };
 
   function layoutOf(key) {
     const L = DATA.layout || {};
@@ -597,6 +600,18 @@
     bg(".choice-btn", t.choiceButtonImage);
     bg(".title-btn", t.titleButtonImage);
     bg("#items-btn", t.itemsButtonImage);
+    bg("#ov-name .box", t.nameBoxImage);
+    bg("#name-field", t.nameFieldImage);
+    // フォント
+    const meta = DATA.meta || {};
+    let fam = meta.font || "";
+    if (meta.fontPath) {
+      rules.push(`@font-face{font-family:"GameFont";src:url("${meta.fontPath}");}`);
+      fam = "GameFont";
+    }
+    if (fam) {
+      rules.push(`body, button, input, textarea, select, #stage, .box { font-family: "${fam}", sans-serif; }`);
+    }
     if (rules.length) {
       const st = document.createElement("style");
       st.textContent = rules.join("\n");

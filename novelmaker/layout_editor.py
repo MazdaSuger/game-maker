@@ -18,7 +18,7 @@ from PySide6.QtGui import QColor
 
 from .model import (
     Project, merged_layout, merged_theme, LAYOUT_ELEMENTS, THEME_FIELDS,
-    DEFAULT_LAYOUT,
+    DEFAULT_LAYOUT, COMP_TARGETS,
 )
 from .editors import FilePicker
 
@@ -28,7 +28,9 @@ PW, PH = 640, 360
 # 各要素のプレビュー上の代表サイズ（プレビュー px）と色
 _ELEM_STYLE = {
     "message": (PW * 0.92, PH * 0.26, "#3a6df0"),
-    "sprite":  (PW * 0.18, PH * 0.80, "#e060b0"),
+    "spriteLeft":   (PW * 0.16, PH * 0.70, "#e060b0"),
+    "spriteCenter": (PW * 0.16, PH * 0.70, "#d04ca0"),
+    "spriteRight":  (PW * 0.16, PH * 0.70, "#b03c90"),
     "choices": (PW * 0.42, PH * 0.30, "#4cc2a0"),
     "gauges":  (PW * 0.20, PH * 0.10, "#ff6b9d"),
     "items":   (PW * 0.06, PH * 0.11, "#f0a030"),
@@ -134,9 +136,7 @@ class LayoutEditor(QWidget):
         hl.addWidget(QLabel("チェックを入れたコンポーネントはプレイ画面で消えます。"))
         self.project.data.setdefault("layout", {})
         from PySide6.QtWidgets import QCheckBox
-        for elem_id, label, kind in LAYOUT_ELEMENTS:
-            if elem_id == "choices":
-                continue  # 選択肢は非表示にすると進行不能になるため対象外
+        for elem_id, label in COMP_TARGETS:   # message/sprite/gauges/items/menu
             cb = QCheckBox(label)
             cur = self.project.data["layout"].get(elem_id, {})
             cb.setChecked(bool(cur.get("hidden", False)))
@@ -160,7 +160,8 @@ class LayoutEditor(QWidget):
             handle = _Handle(elem_id, label, kind, color, (w, hgt),
                              self._on_handle_move, self.canvas)
             self.handles[elem_id] = handle
-            hidden = self.project.data.get("layout", {}).get(elem_id, {}).get("hidden", False)
+            hide_key = "sprite" if elem_id.startswith("sprite") else elem_id
+            hidden = self.project.data.get("layout", {}).get(hide_key, {}).get("hidden", False)
             handle.setVisible(not hidden)
         self._position_handles_from_layout()
 
@@ -205,10 +206,13 @@ class LayoutEditor(QWidget):
     def _set_hidden(self, elem_id: str, hidden: bool):
         d = self.project.data.setdefault("layout", {}).setdefault(elem_id, {})
         d["hidden"] = hidden
-        # プレビュー上のハンドルを薄く表示
-        h = self.handles.get(elem_id)
-        if h is not None:
-            h.setVisible(not hidden)
+        # プレビュー上のハンドルを連動（立ち絵は3スロットまとめて）
+        keys = (["spriteLeft", "spriteCenter", "spriteRight"]
+                if elem_id == "sprite" else [elem_id])
+        for k in keys:
+            h = self.handles.get(k)
+            if h is not None:
+                h.setVisible(not hidden)
         self.project.dirty = True
         self.changed.emit()
 

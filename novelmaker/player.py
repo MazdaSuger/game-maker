@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer, QRect, Signal
 from PySide6.QtGui import QPainter, QColor, QPixmap, QFont, QFontMetrics
 
-from .model import Project, merged_layout, merged_theme
+from .model import Project, merged_layout, merged_theme, SPRITE_POS_KEY
 from .runtime import Runtime, GameState
 from .save import SaveManager
 
@@ -150,10 +150,12 @@ class PlayerWidget(QWidget):
 
         # 名前入力オーバーレイ
         self.name_overlay = self._make_overlay()
+        self.name_overlay.box.setObjectName("nameBox")   # 枠（画像カスタム対象）
         nl = self.name_overlay.box_layout
         self.name_prompt = QLabel("", self.name_overlay)
         self.name_prompt.setObjectName("overlayTitle")
         self.name_field = QLineEdit(self.name_overlay)
+        self.name_field.setObjectName("nameField")       # 入力欄（画像カスタム対象）
         self.name_field.setMaxLength(16)
         self.name_field.returnPressed.connect(self._submit_name)
         name_ok = QPushButton("決定", self.name_overlay)
@@ -311,10 +313,32 @@ class PlayerWidget(QWidget):
         bl.setSpacing(12)
         lay.addWidget(box)
         ov.box_layout = bl  # 後から中身を追加するため公開
+        ov.box = box
         return ov
 
     def _apply_styles(self):
-        self.setStyleSheet(PLAYER_QSS + self._theme_qss())
+        self.setStyleSheet(self._font_qss() + PLAYER_QSS + self._theme_qss())
+
+    def _font_qss(self) -> str:
+        """ゲーム内フォント（取り込みフォント or フォント名）を適用する。"""
+        fam = self._resolve_font_family()
+        if not fam:
+            return ""
+        return f'* {{ font-family: "{fam}"; }}\n'
+
+    def _resolve_font_family(self) -> str:
+        meta = self.project.meta
+        path = meta.get("fontPath", "")
+        if path and os.path.exists(path):
+            try:
+                from PySide6.QtGui import QFontDatabase
+                fid = QFontDatabase.addApplicationFont(path)
+                fams = QFontDatabase.applicationFontFamilies(fid)
+                if fams:
+                    return fams[0]
+            except Exception:
+                pass
+        return meta.get("font", "") or ""
 
     def _theme_qss(self) -> str:
         """テーマ（取り込み画像）に応じた追加スタイルを生成する。"""
@@ -332,6 +356,8 @@ class PlayerWidget(QWidget):
         img_rule("#choiceBtn", t.get("choiceButtonImage", ""))
         img_rule("#titleBtn", t.get("titleButtonImage", ""))
         img_rule("#itemsBtn", t.get("itemsButtonImage", ""))
+        img_rule("#nameBox", t.get("nameBoxImage", ""))
+        img_rule("#nameField", t.get("nameFieldImage", ""), extra="color:#fff;")
         return "\n".join(rules)
 
     # ------------------------------------------------------------------
@@ -745,26 +771,17 @@ class PlayerWidget(QWidget):
             p.setFont(font)
             p.drawText(rect, Qt.AlignCenter, f'［CG］{cg.get("name", "")}')
 
-    @staticmethod
-    def _pos_x_pct(pos: str, center_x: float) -> float:
-        """立ち絵スロットの中央x（％）。左/右は中央から±25%。"""
-        if pos == "left":
-            return max(8.0, center_x - 25)
-        if pos == "right":
-            return min(92.0, center_x + 25)
-        return center_x
-
     def _paint_sprites(self, p: QPainter, rect: QRect, st: GameState):
-        sp = merged_layout(self.project)["sprite"]
-        avail_h = int(rect.height() * (sp.get("scale", 80) / 100.0))
-        by = int(sp.get("y", 99) / 100.0 * rect.height())  # 下端y
-        center_x = sp.get("x", 50)
-        # 左→中央→右 の順で描画
+        L = merged_layout(self.project)
+        # 左→中央→右 の順で、スロットごとの位置・スケールで描画
         for pos in ("left", "center", "right"):
             entry = st.sprites.get(pos)
             if not entry:
                 continue
-            cx = int(self._pos_x_pct(pos, center_x) / 100.0 * rect.width())
+            slot = L.get(SPRITE_POS_KEY[pos], {})
+            avail_h = int(rect.height() * (slot.get("scale", 80) / 100.0))
+            cx = int(slot.get("x", 50) / 100.0 * rect.width())
+            by = int(slot.get("y", 99) / 100.0 * rect.height())
             self._paint_one_sprite(p, rect, entry, cx, by, avail_h)
 
     def _paint_one_sprite(self, p: QPainter, rect: QRect, entry: dict,
