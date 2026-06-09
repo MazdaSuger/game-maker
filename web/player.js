@@ -489,9 +489,23 @@
     ["ov-name", "ov-items", "ov-save", "ov-ending"].forEach(hideOverlay);
     elChoices.style.display = "none";
     setGameChrome(false);
-    $("title-name").textContent = DATA.meta.title || "ノベルゲーム";
+    // タイトルロゴ画像があれば文字の代わりに表示
+    const logo = DATA.meta.titleLogoImage || "";
+    if (logo) {
+      $("title-logo").src = logo; $("title-logo").style.display = "block";
+      $("title-name").style.display = "none";
+    } else {
+      $("title-logo").style.display = "none";
+      $("title-name").style.display = "";
+      $("title-name").textContent = DATA.meta.title || "ノベルゲーム";
+    }
     const author = DATA.meta.author || "";
     $("title-author").textContent = author ? "作： " + author : "";
+    // 配置（レイアウト）
+    const tn = layoutOf("titleName"), tb = layoutOf("title");
+    Object.assign($("title-namebox").style, { left: tn.x + "%", top: tn.y + "%" });
+    document.querySelector(".title-buttons").style.left = tb.x + "%";
+    document.querySelector(".title-buttons").style.top = tb.y + "%";
     // つづきから：セーブがあれば有効
     const hasSave = readSlots().some((s) => s);
     $("btn-continue").disabled = !hasSave;
@@ -549,6 +563,8 @@
     gauges:  { x: 1.2, y: 2 },
     items:   { x: 94, y: 2 },
     menu:    { x: 63, y: 9 },
+    titleName: { x: 50, y: 24 },
+    title:     { x: 50, y: 52 },
   };
   const SPRITE_POS_KEY = { left: "spriteLeft", center: "spriteCenter", right: "spriteRight" };
 

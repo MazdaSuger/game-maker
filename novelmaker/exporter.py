@@ -47,10 +47,12 @@ def _iter_asset_fields(data: dict):
         yield cg, "image"
     for it in data.get("items", []):
         yield it, "image"
-    # 取り込みフォント
+    # 取り込みフォント・タイトルロゴ
     meta = data.get("meta")
-    if isinstance(meta, dict) and "fontPath" in meta:
-        yield meta, "fontPath"
+    if isinstance(meta, dict):
+        for key in ("fontPath", "titleLogoImage"):
+            if key in meta:
+                yield meta, key
     # テーマ（コンポーネント画像）
     theme = data.get("theme")
     if isinstance(theme, dict):

@@ -7,7 +7,7 @@ import os
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QTabWidget, QStackedWidget, QVBoxLayout, QFormLayout,
     QLineEdit, QComboBox, QLabel, QFileDialog, QMessageBox, QToolBar, QHBoxLayout,
-    QPushButton,
+    QPushButton, QDialog, QListWidget, QListWidgetItem,
 )
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtCore import Qt, QStandardPaths, Signal
@@ -22,7 +22,10 @@ from .editors import (
 from .layout_editor import LayoutEditor
 from .flowchart import FlowchartTab
 from .player import PlayerWidget
-from .save import SaveManager, SystemStore, default_save_dir
+from .save import (
+    SaveManager, SystemStore, default_save_dir,
+    load_recent_projects, add_recent_project, remove_recent_project,
+)
 from .exporter import export_to_html, export_to_zip
 
 PROJECT_FILTER = "ノベルメーカー プロジェクト (*.nvproj);;JSON (*.json);;すべて (*.*)"
@@ -56,6 +59,61 @@ def default_documents_dir() -> str:
         if d and os.path.isdir(d):
             return d
     return os.path.expanduser("~")
+
+
+class ProjectListDialog(QDialog):
+    """ノベルメーカー内で最近のプロジェクト一覧を表示し、選んで開く。"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("プロジェクト一覧")
+        self.setMinimumSize(560, 400)
+        self.chosen_path = None
+        lay = QVBoxLayout(self)
+        lay.addWidget(QLabel("<b>最近のプロジェクト</b>（ダブルクリックで開く）"))
+        self.list = QListWidget()
+        self.list.itemDoubleClicked.connect(lambda _: self._open())
+        lay.addWidget(self.list, 1)
+        self._reload()
+        row = QHBoxLayout()
+        op = QPushButton("開く")
+        op.setProperty("primary", True)
+        op.clicked.connect(self._open)
+        rm = QPushButton("一覧から削除")
+        rm.clicked.connect(self._remove)
+        close = QPushButton("閉じる")
+        close.clicked.connect(self.reject)
+        row.addWidget(op); row.addWidget(rm); row.addStretch(); row.addWidget(close)
+        lay.addLayout(row)
+
+    def _reload(self):
+        self.list.clear()
+        self._items = load_recent_projects()
+        if not self._items:
+            self.list.addItem("（履歴はありません。プロジェクトを保存/読込すると追加されます）")
+            return
+        for it in self._items:
+            w = QListWidgetItem(f'{it.get("title","(無題)")}\n{it.get("path","")}'
+                                f'  —  {it.get("savedAt","")}')
+            self.list.addItem(w)
+
+    def _current(self):
+        i = self.list.currentRow()
+        if 0 <= i < len(getattr(self, "_items", [])):
+            return self._items[i]
+        return None
+
+    def _open(self):
+        it = self._current()
+        if it:
+            self.chosen_path = it.get("path")
+            self.accept()
+
+    def _remove(self):
+        it = self._current()
+        if it:
+            remove_recent_project(it.get("path"))
+            self._reload()
 
 
 class SettingsEditor(QWidget):
@@ -98,12 +156,18 @@ class SettingsEditor(QWidget):
             lambda t: (project.meta.__setitem__("fontPath", t),
                        setattr(project, "dirty", True)),
             "フォント (*.ttf *.otf *.ttc *.woff *.woff2)")
+        self.logo_picker = FilePicker(
+            project.meta.get("titleLogoImage", ""),
+            lambda t: (project.meta.__setitem__("titleLogoImage", t),
+                       setattr(project, "dirty", True)),
+            "画像 (*.png *.jpg *.jpeg *.bmp *.webp)")
 
         f.addRow("タイトル:", self.title_edit)
         f.addRow("作者:", self.author_edit)
         f.addRow("開始シーン:", self.start_cb)
         f.addRow("タイトル画面の背景:", self.titlebg_cb)
         f.addRow("タイトル画面のBGM:", self.titlebgm_cb)
+        f.addRow("タイトルロゴ画像(任意):", self.logo_picker)
         f.addRow("フォント:", self.font_cb)
         f.addRow("取り込みフォント(任意):", self.font_picker)
         fhint = QLabel("※ フォントはゲーム画面（プレイ／ブラウザ書き出し）に適用されます。\n"
@@ -359,6 +423,7 @@ class MainWindow(QMainWindow):
         for text, slot, sc in [
             ("新規プロジェクト", self.new_project, QKeySequence.New),
             ("開く…", self.open_project, QKeySequence.Open),
+            ("📂 プロジェクト一覧…", self.open_project_list, None),
             ("保存", self.save_project, QKeySequence.Save),
             ("名前を付けて保存…", self.save_project_as, QKeySequence.SaveAs),
         ]:
@@ -524,9 +589,13 @@ class MainWindow(QMainWindow):
     def open_project(self):
         if not self._confirm_discard():
             return
-        path, _ = QFileDialog.getOpenFileName(self, "プロジェクトを開く", "", PROJECT_FILTER)
-        if not path:
-            return
+        path, _ = QFileDialog.getOpenFileName(
+            self, "プロジェクトを開く", default_documents_dir(), PROJECT_FILTER)
+        if path:
+            self.open_path(path)
+
+    def open_path(self, path: str):
+        """指定パスのプロジェクトを開く（一覧/ダイアログから共用）。"""
         try:
             with open(path, "r", encoding="utf-8") as f:
                 proj = Project.from_json(f.read())
@@ -534,8 +603,15 @@ class MainWindow(QMainWindow):
             self.project = proj
             self._reload_all_editors()
             self._update_title()
+            add_recent_project(path, self.project.title)
         except Exception as e:
             QMessageBox.critical(self, "読み込み失敗", f"ファイルを開けませんでした:\n{e}")
+
+    def open_project_list(self):
+        dlg = ProjectListDialog(self)
+        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.chosen_path:
+            if self._confirm_discard():
+                self.open_path(dlg.chosen_path)
 
     def save_project(self) -> bool:
         if not self.project.path:
@@ -559,6 +635,7 @@ class MainWindow(QMainWindow):
                 f.write(self.project.to_json())
             self.project.dirty = False
             self._update_title()
+            add_recent_project(path, self.project.title)
             self.statusBar().showMessage(f"保存しました: {path}", 4000)
             return True
         except Exception as e:

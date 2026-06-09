@@ -23,6 +23,50 @@ def default_save_dir() -> str:
     return d
 
 
+def _recent_path() -> str:
+    return os.path.join(default_save_dir(), "recent_projects.json")
+
+
+def load_recent_projects() -> list:
+    """最近開いた/保存したプロジェクト一覧を返す（新しい順）。"""
+    p = _recent_path()
+    if not os.path.exists(p):
+        return []
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        items = data.get("projects", []) if isinstance(data, dict) else []
+        # 実在するものだけ
+        return [it for it in items if it.get("path") and os.path.exists(it["path"])]
+    except (OSError, ValueError):
+        return []
+
+
+def add_recent_project(path: str, title: str):
+    """一覧に追加（既存は先頭へ移動）。最大20件。"""
+    if not path:
+        return
+    path = os.path.abspath(path)
+    items = [it for it in load_recent_projects() if it.get("path") != path]
+    items.insert(0, {"path": path, "title": title,
+                     "savedAt": time.strftime("%Y-%m-%d %H:%M:%S")})
+    items = items[:20]
+    try:
+        with open(_recent_path(), "w", encoding="utf-8") as f:
+            json.dump({"projects": items}, f, ensure_ascii=False, indent=2)
+    except OSError:
+        pass
+
+
+def remove_recent_project(path: str):
+    items = [it for it in load_recent_projects() if it.get("path") != path]
+    try:
+        with open(_recent_path(), "w", encoding="utf-8") as f:
+            json.dump({"projects": items}, f, ensure_ascii=False, indent=2)
+    except OSError:
+        pass
+
+
 class Slot:
     """1スロット分のセーブデータ。"""
 

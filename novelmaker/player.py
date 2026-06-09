@@ -253,33 +253,42 @@ class PlayerWidget(QWidget):
         # タイトル画面オーバーレイ（はじめから / つづきから）
         self.title_overlay = QFrame(self)
         self.title_overlay.setObjectName("titleOverlay")
-        tl = QVBoxLayout(self.title_overlay)
-        tl.setAlignment(Qt.AlignCenter)
-        self.title_name = QLabel("", self.title_overlay)
+        # タイトル文字/ロゴ・作者（個別配置できるよう絶対配置のコンテナ）
+        self.title_name_box = QWidget(self.title_overlay)
+        nbl = QVBoxLayout(self.title_name_box)
+        nbl.setContentsMargins(0, 0, 0, 0)
+        nbl.setAlignment(Qt.AlignCenter)
+        self.title_logo = QLabel(self.title_name_box)   # ロゴ画像
+        self.title_logo.setAlignment(Qt.AlignCenter)
+        self.title_logo.hide()
+        self.title_name = QLabel("", self.title_name_box)
         self.title_name.setObjectName("titleName")
         self.title_name.setAlignment(Qt.AlignCenter)
         self.title_name.setWordWrap(True)
-        self.title_author = QLabel("", self.title_overlay)
+        self.title_author = QLabel("", self.title_name_box)
         self.title_author.setObjectName("titleAuthor")
         self.title_author.setAlignment(Qt.AlignCenter)
-        tl.addWidget(self.title_name)
-        tl.addWidget(self.title_author)
-        tl.addSpacing(24)
-        btn_box = QVBoxLayout()
-        btn_box.setAlignment(Qt.AlignCenter)
-        self.btn_new = QPushButton("▶ はじめから", self.title_overlay)
+        nbl.addWidget(self.title_logo)
+        nbl.addWidget(self.title_name)
+        nbl.addWidget(self.title_author)
+
+        # ボタン群（絶対配置のコンテナ）
+        self.title_btn_box = QWidget(self.title_overlay)
+        bbl = QVBoxLayout(self.title_btn_box)
+        bbl.setContentsMargins(0, 0, 0, 0)
+        bbl.setAlignment(Qt.AlignCenter)
+        self.btn_new = QPushButton("▶ はじめから", self.title_btn_box)
         self.btn_new.setObjectName("titleBtn")
         self.btn_new.clicked.connect(self._begin_new)
-        self.btn_continue = QPushButton("⏵ つづきから", self.title_overlay)
+        self.btn_continue = QPushButton("⏵ つづきから", self.title_btn_box)
         self.btn_continue.setObjectName("titleBtn")
         self.btn_continue.clicked.connect(self._begin_continue)
-        self.btn_title_exit = QPushButton("✕ 終了（エディタへ）", self.title_overlay)
+        self.btn_title_exit = QPushButton("✕ 終了（エディタへ）", self.title_btn_box)
         self.btn_title_exit.setObjectName("titleBtn")
         self.btn_title_exit.clicked.connect(self._exit)
         for b in (self.btn_new, self.btn_continue, self.btn_title_exit):
             b.setFixedWidth(280)
-            btn_box.addWidget(b)
-        tl.addLayout(btn_box)
+            bbl.addWidget(b)
         self.title_overlay.hide()
 
         # エンドロール（縦スクロール）
@@ -374,8 +383,19 @@ class PlayerWidget(QWidget):
         self.choice_frame.hide()
         # ゲーム用UIを隠す
         self._set_game_chrome(False)
-        # タイトル情報
-        self.title_name.setText(self.project.title)
+        # タイトル情報（ロゴ画像があれば文字の代わりに表示）
+        logo = self.project.meta.get("titleLogoImage", "")
+        pix = self._pixmap(logo) if logo else None
+        if pix is not None:
+            scaled = pix.scaledToWidth(min(pix.width(), int(self.width() * 0.6)),
+                                       Qt.SmoothTransformation)
+            self.title_logo.setPixmap(scaled)
+            self.title_logo.show()
+            self.title_name.hide()
+        else:
+            self.title_logo.hide()
+            self.title_name.show()
+            self.title_name.setText(self.project.title)
         author = self.project.meta.get("author", "")
         self.title_author.setText(f"作： {author}" if author else "")
         # つづきから：セーブが1つでもあれば有効
@@ -388,7 +408,20 @@ class PlayerWidget(QWidget):
         self._play_bgm_id(self.project.meta.get("titleBgm", ""))
         self.title_overlay.show()
         self.title_overlay.raise_()
+        self._layout_title()
         self.update()
+
+    def _layout_title(self):
+        """タイトル文字/ロゴとボタン群を、レイアウト設定に従い配置する。"""
+        w, h = self.width(), self.height()
+        L = merged_layout(self.project)
+        for box, key in ((self.title_name_box, "titleName"),
+                         (self.title_btn_box, "title")):
+            box.adjustSize()
+            d = L.get(key, {})
+            cx = int(d.get("x", 50) / 100.0 * w)
+            cy = int(d.get("y", 50) / 100.0 * h)
+            box.move(cx - box.width() // 2, cy - box.height() // 2)
 
     def start_at(self, scene_id: str):
         """タイトルを飛ばして指定シーンから開始（選択シーンのテスト用）。"""
@@ -1055,6 +1088,7 @@ class PlayerWidget(QWidget):
                    self.ending_overlay, self.title_overlay, self.endroll_overlay,
                    self.itemget_overlay):
             ov.setGeometry(0, 0, w, h)
+        self._layout_title()
 
     def _raise_overlays(self):
         # タイトルを先に上げ、モーダル（ロード等）を最後に上げて最前面にする

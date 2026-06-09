@@ -92,7 +92,9 @@ DEFAULT_LAYOUT = {
     "gauges":  {"x": 1.2, "y": 2.0},     # 左上
     "items":   {"x": 94.0, "y": 2.0},    # 左上座標（右上付近）
     "menu":    {"x": 63.0, "y": 9.0},
-    "title":   {"x": 50.0, "y": 38.0},   # タイトルのボタン群中央
+    # タイトル画面
+    "titleName": {"x": 50.0, "y": 24.0},  # タイトル文字/ロゴ（中央）
+    "title":     {"x": 50.0, "y": 52.0},  # ボタン群（中央）
 }
 
 # 立ち絵スロット → レイアウトキー
@@ -108,6 +110,8 @@ LAYOUT_ELEMENTS = [
     ("gauges",  "ゲージ",   "point"),
     ("items",   "アイテム", "point"),
     ("menu",    "メニュー", "point"),
+    ("titleName", "タイトル文字", "point"),
+    ("title",     "タイトルボタン", "point"),
 ]
 
 # テーマ（コンポーネントの取り込み画像）
@@ -414,6 +418,7 @@ def default_project() -> dict:
             "titleBgm": bgm_main,   # タイトル画面のBGM
             "font": "",             # ゲーム内フォント（フォント名）
             "fontPath": "",         # 取り込みフォントファイル（任意）
+            "titleLogoImage": "",   # タイトル画面のロゴ画像（任意）
         },
         "variables": [
             {"id": uid("var"), "name": "playerName", "type": "string", "initial": "主人公"},
