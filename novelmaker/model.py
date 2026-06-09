@@ -83,19 +83,22 @@ GAUGE_OPS = [("set", "代入 ="), ("add", "加算 +="), ("sub", "減算 -=")]
 # 位置は画面サイズに対する百分率。x,y は要素の左上（spriteのみ中央下）。
 DEFAULT_LAYOUT = {
     "message": {"x": 4.0, "y": 72.0, "w": 92.0, "h": 26.0},
-    "choices": {"x": 50.0, "y": 42.0},   # 中央アンカー
-    # 立ち絵は左/中/右の3スロットを個別に配置（中央下アンカー）
+    "choices": {"x": 50.0, "y": 42.0, "scale": 100.0},   # 中央アンカー
+    # 立ち絵は左/中/右の3スロットを個別に配置（中央下アンカー）。scale=高さ%
     "spriteLeft":   {"x": 25.0, "y": 99.0, "scale": 80.0},
     "spriteCenter": {"x": 50.0, "y": 99.0, "scale": 80.0},
     "spriteRight":  {"x": 75.0, "y": 99.0, "scale": 80.0},
     "sprite":  {},                       # 立ち絵の非表示フラグ用
-    "gauges":  {"x": 1.2, "y": 2.0},     # 左上
-    "items":   {"x": 94.0, "y": 2.0},    # 左上座標（右上付近）
-    "menu":    {"x": 63.0, "y": 9.0},
+    "gauges":  {"x": 1.2, "y": 2.0, "scale": 100.0},     # 左上
+    "items":   {"x": 94.0, "y": 2.0, "scale": 100.0},    # 左上座標（右上付近）
+    "menu":    {"x": 63.0, "y": 9.0, "scale": 100.0},
     # タイトル画面
-    "titleName": {"x": 50.0, "y": 24.0},  # タイトル文字/ロゴ（中央）
-    "title":     {"x": 50.0, "y": 52.0},  # ボタン群（中央）
+    "titleName": {"x": 50.0, "y": 24.0, "scale": 100.0},  # タイトル文字/ロゴ（中央）
+    "title":     {"x": 50.0, "y": 52.0, "scale": 100.0},  # ボタン群（中央）
 }
+
+# サイズ(scale)を持つ point 系コンポーネント
+SCALE_COMPONENTS = ["choices", "gauges", "items", "menu", "titleName", "title"]
 
 # 立ち絵スロット → レイアウトキー
 SPRITE_POS_KEY = {"left": "spriteLeft", "center": "spriteCenter", "right": "spriteRight"}
@@ -418,6 +421,7 @@ def default_project() -> dict:
             "titleBgm": bgm_main,   # タイトル画面のBGM
             "font": "",             # ゲーム内フォント（フォント名）
             "fontPath": "",         # 取り込みフォントファイル（任意）
+            "fontScale": 100,       # 文字サイズ（％）
             "titleLogoImage": "",   # タイトル画面のロゴ画像（任意）
         },
         "variables": [

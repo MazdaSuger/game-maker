@@ -145,12 +145,50 @@ class LayoutEditor(QWidget):
             cb.toggled.connect(lambda v, k=elem_id: self._set_hidden(k, v))
             hl.addWidget(cb)
         right.addWidget(hbox)
+
+        # コンポーネントのサイズ
+        szbox = QGroupBox("コンポーネントのサイズ")
+        szf = QFormLayout(szbox)
+        szf.addRow("セリフ枠 幅:", self._size_spin("message", "w", 10, 100, 92))
+        szf.addRow("セリフ枠 高さ:", self._size_spin("message", "h", 5, 100, 26))
+        for key, label in [("spriteLeft", "立ち絵(左) 大きさ"),
+                           ("spriteCenter", "立ち絵(中) 大きさ"),
+                           ("spriteRight", "立ち絵(右) 大きさ")]:
+            szf.addRow(label + ":", self._size_spin(key, "scale", 10, 150, 80))
+        for key, label in [("choices", "選択肢"), ("gauges", "ゲージ"),
+                           ("items", "アイテムボタン"), ("menu", "メニュー"),
+                           ("titleName", "タイトル文字"), ("title", "タイトルボタン")]:
+            szf.addRow(label + " 大きさ:", self._size_spin(key, "scale", 30, 300, 100))
+        right.addWidget(szbox)
         right.addStretch()
         rw = QWidget(); rw.setLayout(right)
         rw.setMaximumWidth(380)
-        root.addWidget(rw)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidget(rw)
+        scroll.setMaximumWidth(400)
+        root.addWidget(scroll)
 
         self._build_handles()
+
+    def _size_spin(self, key: str, field: str, lo: int, hi: int, default: int):
+        from PySide6.QtWidgets import QSpinBox
+        sp = QSpinBox()
+        sp.setRange(lo, hi)
+        sp.setSuffix(" %")
+        cur = self.project.data.get("layout", {}).get(key, {}).get(field, default)
+        try:
+            sp.setValue(int(cur))
+        except (TypeError, ValueError):
+            sp.setValue(default)
+
+        def on_change(v):
+            self.project.data.setdefault("layout", {}).setdefault(key, {})[field] = v
+            self.project.dirty = True
+            self.changed.emit()
+        sp.valueChanged.connect(on_change)
+        return sp
 
     # ------------------------------------------------------------------
     def _build_handles(self):

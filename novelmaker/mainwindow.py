@@ -168,8 +168,18 @@ class SettingsEditor(QWidget):
         f.addRow("タイトル画面の背景:", self.titlebg_cb)
         f.addRow("タイトル画面のBGM:", self.titlebgm_cb)
         f.addRow("タイトルロゴ画像(任意):", self.logo_picker)
+        from PySide6.QtWidgets import QSpinBox
+        self.fontsize_spin = QSpinBox()
+        self.fontsize_spin.setRange(50, 250)
+        self.fontsize_spin.setSuffix(" %")
+        self.fontsize_spin.setValue(int(project.meta.get("fontScale", 100) or 100))
+        self.fontsize_spin.valueChanged.connect(
+            lambda v: (project.meta.__setitem__("fontScale", v),
+                       setattr(project, "dirty", True)))
+
         f.addRow("フォント:", self.font_cb)
         f.addRow("取り込みフォント(任意):", self.font_picker)
+        f.addRow("文字サイズ:", self.fontsize_spin)
         fhint = QLabel("※ フォントはゲーム画面（プレイ／ブラウザ書き出し）に適用されます。\n"
                        "　取り込みフォント(.ttf/.otf)を指定すると、その書体が優先されます。")
         fhint.setStyleSheet("color:#888;")

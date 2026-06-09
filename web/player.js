@@ -503,9 +503,11 @@
     $("title-author").textContent = author ? "作： " + author : "";
     // 配置（レイアウト）
     const tn = layoutOf("titleName"), tb = layoutOf("title");
-    Object.assign($("title-namebox").style, { left: tn.x + "%", top: tn.y + "%" });
-    document.querySelector(".title-buttons").style.left = tb.x + "%";
-    document.querySelector(".title-buttons").style.top = tb.y + "%";
+    Object.assign($("title-namebox").style, { left: tn.x + "%", top: tn.y + "%",
+      transform: `translate(-50%,-50%) scale(${compScale("titleName")})` });
+    const tbtns = document.querySelector(".title-buttons");
+    tbtns.style.left = tb.x + "%"; tbtns.style.top = tb.y + "%";
+    tbtns.style.transform = `translate(-50%,-50%) scale(${compScale("title")})`;
     // つづきから：セーブがあれば有効
     const hasSave = readSlots().some((s) => s);
     $("btn-continue").disabled = !hasSave;
@@ -580,6 +582,10 @@
     if (ov !== undefined) return ov;                       // 表示/消去コマンド
     return !!layoutOf(key).hidden;
   }
+  function compScale(key) {
+    const s = layoutOf(key).scale;
+    return (s === undefined ? 100 : s) / 100;
+  }
 
   function applyLayout() {
     const m = layoutOf("message");
@@ -587,15 +593,25 @@
       { left: m.x + "%", top: m.y + "%", width: m.w + "%",
         height: m.h + "%", bottom: "auto" });
     const g = layoutOf("gauges");
-    Object.assign(elGauges.style, { left: g.x + "%", top: g.y + "%", right: "auto" });
+    Object.assign(elGauges.style, { left: g.x + "%", top: g.y + "%", right: "auto",
+      transform: `scale(${compScale("gauges")})`, transformOrigin: "top left" });
     const it = layoutOf("items");
     Object.assign($("items-btn").style,
-      { left: it.x + "%", top: it.y + "%", right: "auto" });
+      { left: it.x + "%", top: it.y + "%", right: "auto",
+        transform: `scale(${compScale("items")})`, transformOrigin: "top left" });
     const mn = layoutOf("menu");
-    Object.assign($("menu").style, { left: mn.x + "%", top: mn.y + "%", right: "auto" });
+    Object.assign($("menu").style, { left: mn.x + "%", top: mn.y + "%", right: "auto",
+      transform: `scale(${compScale("menu")})`, transformOrigin: "top left" });
     const c = layoutOf("choices");
     Object.assign(elChoices.style,
-      { left: c.x + "%", top: c.y + "%", transform: "translate(-50%,-50%)" });
+      { left: c.x + "%", top: c.y + "%",
+        transform: `translate(-50%,-50%) scale(${compScale("choices")})` });
+    // フォントサイズ（セリフ系）
+    const fscale = (DATA.meta.fontScale || 100) / 100;
+    let fstyle = document.getElementById("nm-fontsize");
+    if (!fstyle) { fstyle = document.createElement("style"); fstyle.id = "nm-fontsize"; document.head.appendChild(fstyle); }
+    fstyle.textContent =
+      `#msg-text{font-size:${19 * fscale}px;} #msg-name{font-size:${18 * fscale}px;}`;
     // 立ち絵(#char)はステージ全面のコンテナ。各立ち絵は updateStage で配置。
   }
   function spriteX(pos, centerX) {

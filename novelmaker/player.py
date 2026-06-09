@@ -255,6 +255,7 @@ class PlayerWidget(QWidget):
         self.title_overlay.setObjectName("titleOverlay")
         # タイトル文字/ロゴ・作者（個別配置できるよう絶対配置のコンテナ）
         self.title_name_box = QWidget(self.title_overlay)
+        self.title_name_box.setStyleSheet("background: transparent;")
         nbl = QVBoxLayout(self.title_name_box)
         nbl.setContentsMargins(0, 0, 0, 0)
         nbl.setAlignment(Qt.AlignCenter)
@@ -274,6 +275,7 @@ class PlayerWidget(QWidget):
 
         # ボタン群（絶対配置のコンテナ）
         self.title_btn_box = QWidget(self.title_overlay)
+        self.title_btn_box.setStyleSheet("background: transparent;")
         bbl = QVBoxLayout(self.title_btn_box)
         bbl.setContentsMargins(0, 0, 0, 0)
         bbl.setAlignment(Qt.AlignCenter)
@@ -326,7 +328,41 @@ class PlayerWidget(QWidget):
         return ov
 
     def _apply_styles(self):
-        self.setStyleSheet(self._font_qss() + PLAYER_QSS + self._theme_qss())
+        self.setStyleSheet(self._font_qss() + PLAYER_QSS
+                           + self._theme_qss() + self._size_qss())
+
+    @staticmethod
+    def _num(v, default=100):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return float(default)
+
+    def _comp_scale(self, elem: str) -> float:
+        L = merged_layout(self.project)
+        return self._num(L.get(elem, {}).get("scale", 100), 100) / 100.0
+
+    def _size_qss(self) -> str:
+        """文字サイズ（セリフ系）と各コンポーネントのサイズ(%)を反映する。"""
+        fs = self._num(self.project.meta.get("fontScale", 100), 100) / 100.0
+        ch = self._comp_scale("choices")
+        mn = self._comp_scale("menu")
+        its = self._comp_scale("items")
+        tn = self._comp_scale("titleName")
+        tb = self._comp_scale("title")
+        r = [
+            f'#msgText {{ font-size: {19 * fs:.0f}px; }}',
+            f'#nameLabel {{ font-size: {18 * fs:.0f}px; }}',
+            f'#choiceBtn {{ font-size: {17 * ch:.0f}px; '
+            f'padding: {14 * ch:.0f}px {20 * ch:.0f}px; }}',
+            f'#menuBtn {{ font-size: {13 * mn:.0f}px; }}',
+            f'#titleName {{ font-size: {44 * tn:.0f}px; }}',
+            f'#titleBtn {{ font-size: {18 * tb:.0f}px; '
+            f'padding: {14 * tb:.0f}px {24 * tb:.0f}px; }}',
+            f'#itemsBtn {{ font-size: {20 * its:.0f}px; '
+            f'border-radius: {22 * its:.0f}px; }}',
+        ]
+        return "\n".join(r)
 
     def _font_qss(self) -> str:
         """ゲーム内フォント（取り込みフォント or フォント名）を適用する。"""
@@ -415,6 +451,10 @@ class PlayerWidget(QWidget):
         """タイトル文字/ロゴとボタン群を、レイアウト設定に従い配置する。"""
         w, h = self.width(), self.height()
         L = merged_layout(self.project)
+        # ボタン幅をサイズ(%)に合わせる
+        tw = int(280 * self._comp_scale("title"))
+        for b in (self.btn_new, self.btn_continue, self.btn_title_exit):
+            b.setFixedWidth(tw)
         for box, key in ((self.title_name_box, "titleName"),
                          (self.title_btn_box, "title")):
             box.adjustSize()
@@ -700,13 +740,15 @@ class PlayerWidget(QWidget):
             if it.widget():
                 it.widget().setParent(None)
         st = self.runtime.state
+        gs = self._comp_scale("gauges")
+        self.gauge_panel.setFixedWidth(int(206 * gs))
         shown = False
         for g in self.project.gauges:
             if not g.get("show", True):
                 continue
             shown = True
             val = st.gauges.get(g["id"], g.get("initial", 0))
-            row = _GaugeBar(g, val, self.gauge_panel)
+            row = _GaugeBar(g, val, gs, self.gauge_panel)
             self.gauge_layout.addWidget(row)
         self.gauge_panel.setVisible(shown and not self._comp_hidden("gauges")
                                     and not self._title_mode)
@@ -1071,8 +1113,10 @@ class PlayerWidget(QWidget):
         g = L["gauges"]
         self.gauge_panel.adjustSize()
         self.gauge_panel.move(px(g["x"], w), px(g["y"], h))
-        # アイテムボタン（左上座標）
+        # アイテムボタン（左上座標・サイズ）
         it = L["items"]
+        isz = int(44 * self._comp_scale("items"))
+        self.items_btn.setFixedSize(isz, isz)
         self.items_btn.move(px(it["x"], w), px(it["y"], h))
         # メニュー（左上座標）
         mn = L["menu"]
@@ -1125,35 +1169,39 @@ class PlayerWidget(QWidget):
 # ゲージバー
 # ---------------------------------------------------------------------------
 class _GaugeBar(QWidget):
-    def __init__(self, gauge: dict, value, parent=None):
+    def __init__(self, gauge: dict, value, scale=1.0, parent=None):
         super().__init__(parent)
         self.gauge = gauge
         self.value = float(value)
-        self.setFixedSize(180, 30)
+        self.scale = scale
+        self.setFixedSize(int(180 * scale), int(30 * scale))
 
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         g = self.gauge
+        s = self.scale
         lo = float(g.get("min", 0))
         hi = float(g.get("max", 100))
         ratio = 0 if hi <= lo else max(0.0, min(1.0, (self.value - lo) / (hi - lo)))
 
-        bar_rect = QRect(0, 16, self.width(), 12)
+        bar_y = int(16 * s)
+        bar_h = int(12 * s)
+        bar_rect = QRect(0, bar_y, self.width(), bar_h)
         p.setBrush(QColor(0, 0, 0, 120))
         p.setPen(Qt.NoPen)
-        p.drawRoundedRect(bar_rect, 6, 6)
-        fill = QRect(0, 16, int(self.width() * ratio), 12)
+        p.drawRoundedRect(bar_rect, int(6 * s), int(6 * s))
+        fill = QRect(0, bar_y, int(self.width() * ratio), bar_h)
         p.setBrush(QColor(g.get("color", "#4cc2ff")))
-        p.drawRoundedRect(fill, 6, 6)
+        p.drawRoundedRect(fill, int(6 * s), int(6 * s))
 
         p.setPen(QColor("#ffffff"))
         font = QFont()
-        font.setPointSize(9)
+        font.setPointSize(max(7, int(9 * s)))
         font.setBold(True)
         p.setFont(font)
         val = int(self.value) if self.value == int(self.value) else round(self.value, 1)
-        p.drawText(QRect(0, 0, self.width(), 14), Qt.AlignLeft,
+        p.drawText(QRect(0, 0, self.width(), int(14 * s)), Qt.AlignLeft,
                    f'{g.get("name","")}: {val}')
         p.end()
 
@@ -1208,12 +1256,13 @@ PlayerWidget { background:#000; }
 }
 #titleAuthor { font-size: 16px; color: #cdd6f4; }
 #titleBtn {
-    background: rgba(30,36,60,0.92); border: 2px solid rgba(150,170,230,0.6);
-    border-radius: 12px; padding: 14px 24px; font-size: 18px; color: #eef;
-    margin: 6px 0;
+    background: transparent; border: none;
+    padding: 8px 24px; font-size: 18px; font-weight: bold; color: #eef;
+    margin: 4px 0;
 }
-#titleBtn:hover { background: rgba(70,90,160,0.95); border-color:#9fe3ff; }
-#titleBtn:disabled { color: #888; border-color: #444; background: rgba(20,24,40,0.6); }
+#titleBtn:hover { color: #9fe3ff; }
+#titleBtn:disabled { color: #888; }
+#titleName { background: transparent; }
 #overlayBox {
     background: #1a1e2e;
     border: 2px solid rgba(150,170,230,0.5);

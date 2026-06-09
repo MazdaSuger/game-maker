@@ -181,10 +181,9 @@ html, body {
   display: flex; flex-direction: column; align-items: center; gap: 12px;
 }
 .title-btn {
-  width: 280px; padding: 14px 24px; font-size: 18px; color: #eef;
-  background: rgba(30,36,60,0.92); border: 2px solid var(--border);
-  border-radius: 12px; cursor: pointer;
+  width: 280px; padding: 8px 24px; font-size: 18px; font-weight: bold; color: #eef;
+  background: transparent; border: none; cursor: pointer;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.7);
 }
-.title-btn:hover { background: rgba(70,90,160,0.95); border-color: #9fe3ff; }
-.title-btn:disabled { color: #888; border-color: #444;
-  background: rgba(20,24,40,0.6); cursor: not-allowed; }
+.title-btn:hover { color: #9fe3ff; }
+.title-btn:disabled { color: #888; cursor: not-allowed; }
