@@ -165,6 +165,8 @@ def new_term(kind: str = "var") -> dict:
         return {"kind": "item", "ref": "", "op": "has", "value": ""}
     if kind == "ending":
         return {"kind": "ending", "ref": "", "op": ">=", "value": "1"}
+    if kind == "allEndings":
+        return {"kind": "allEndings"}
     return {"kind": kind, "ref": "", "op": "==", "value": "0"}
 
 
@@ -218,6 +220,17 @@ def new_command(ctype: str) -> dict:
     elif ctype == "ending":
         base.update(endingId="")
     return base
+
+
+def new_title_variation() -> dict:
+    """新しいタイトル演出（条件付き上書き）。"""
+    return {
+        "id": uid("tv"),
+        "name": "新しい演出",
+        "condition": empty_condition(),
+        "bg": "", "bgm": "", "logo": "",   # 空＝既定のまま
+        "buttons": [],                     # [{text, targetScene}]
+    }
 
 
 def all_labels(project: "Project") -> list:
@@ -423,6 +436,7 @@ def default_project() -> dict:
             "fontPath": "",         # 取り込みフォントファイル（任意）
             "fontScale": 100,       # 文字サイズ（％）
             "titleLogoImage": "",   # タイトル画面のロゴ画像（任意）
+            "titleVariations": [],  # 条件付きタイトル演出（解放後に背景/BGM/ボタン変更）
         },
         "variables": [
             {"id": uid("var"), "name": "playerName", "type": "string", "initial": "主人公"},

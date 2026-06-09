@@ -53,6 +53,10 @@ def _iter_asset_fields(data: dict):
         for key in ("fontPath", "titleLogoImage"):
             if key in meta:
                 yield meta, key
+        # タイトル演出のロゴ
+        for tv in meta.get("titleVariations", []) or []:
+            if "logo" in tv:
+                yield tv, "logo"
     # テーマ（コンポーネント画像）
     theme = data.get("theme")
     if isinstance(theme, dict):

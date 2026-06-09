@@ -105,6 +105,15 @@ def _eval_term(term: dict, state: "GameState") -> bool:
         cnt = (sysd.get("endings", {}) or {}).get(ref, 0)
         return _compare(_to_number(cnt), op, _to_number(raw))
 
+    if kind == "allEndings":
+        # 全エンディングを1回以上解放したか
+        ids = getattr(state, "_all_ending_ids", []) or []
+        if not ids:
+            return False
+        sysd = getattr(state, "system", None) or {}
+        ec = sysd.get("endings", {}) or {}
+        return all(_to_number(ec.get(i, 0)) >= 1 for i in ids)
+
     if kind == "item":
         has = ref in state.items
         if op == "has":
@@ -272,6 +281,7 @@ class Runtime:
         st.cmd_index = 0
         self._init_system_vars()
         st.system = self.system.data          # システムデータへの参照
+        st._all_ending_ids = [e["id"] for e in self.project.endings]
         self.state = st
         self._pending = None
         return self.advance()
@@ -280,6 +290,7 @@ class Runtime:
         """セーブ状態から再開する。"""
         self._init_system_vars()
         state.system = self.system.data
+        state._all_ending_ids = [e["id"] for e in self.project.endings]
         self.state = state
         return self.advance()
 

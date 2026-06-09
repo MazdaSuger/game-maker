@@ -17,7 +17,7 @@ from PySide6.QtCore import Qt, QTimer, QRect, Signal
 from PySide6.QtGui import QPainter, QColor, QPixmap, QFont, QFontMetrics
 
 from .model import Project, merged_layout, merged_theme, SPRITE_POS_KEY
-from .runtime import Runtime, GameState
+from .runtime import Runtime, GameState, evaluate_condition
 from .save import SaveManager
 
 
@@ -419,8 +419,13 @@ class PlayerWidget(QWidget):
         self.choice_frame.hide()
         # ゲーム用UIを隠す
         self._set_game_chrome(False)
+        # タイトル演出（条件を満たす最初の演出で背景/BGM/ロゴ/ボタンを上書き）
+        var = self._matched_title_variation()
+        logo = (var.get("logo") if var else "") or self.project.meta.get("titleLogoImage", "")
+        self._title_bg_override = (var.get("bg") if var else "") or self.project.meta.get("titleBg", "")
+        self._title_bgm_override = (var.get("bgm") if var else "") or self.project.meta.get("titleBgm", "")
+        self._build_title_extra_buttons(var)
         # タイトル情報（ロゴ画像があれば文字の代わりに表示）
-        logo = self.project.meta.get("titleLogoImage", "")
         pix = self._pixmap(logo) if logo else None
         if pix is not None:
             scaled = pix.scaledToWidth(min(pix.width(), int(self.width() * 0.6)),
@@ -439,13 +444,49 @@ class PlayerWidget(QWidget):
         has_save = any(s is not None for s in self.saves.slots)
         self.btn_continue.setEnabled(has_save)
         self.btn_continue.setToolTip("" if has_save else "セーブデータがありません")
-        # タイトル背景・BGM
-        self._title_bg_id = self.project.meta.get("titleBg", "")
-        self._play_bgm_id(self.project.meta.get("titleBgm", ""))
+        # タイトル背景・BGM（演出があれば上書き）
+        self._title_bg_id = self._title_bg_override
+        self._play_bgm_id(self._title_bgm_override)
         self.title_overlay.show()
         self.title_overlay.raise_()
         self._layout_title()
         self.update()
+
+    def _matched_title_variation(self):
+        """条件を満たす最初のタイトル演出を返す（無ければ None）。"""
+        variations = self.project.meta.get("titleVariations", []) or []
+        if not variations:
+            return None
+        ctx = GameState()
+        ctx.system = self.runtime.system.data
+        ctx._all_ending_ids = [e["id"] for e in self.project.endings]
+        for v in variations:
+            if evaluate_condition(v.get("condition"), ctx):
+                return v
+        return None
+
+    def _build_title_extra_buttons(self, var):
+        """演出で追加するボタンを作り直す。"""
+        if not hasattr(self, "_title_extra_buttons"):
+            self._title_extra_buttons = []
+        for b in self._title_extra_buttons:
+            b.setParent(None)
+        self._title_extra_buttons = []
+        if not var:
+            return
+        bbl = self.title_btn_box.layout()
+        # 「つづきから」の直後（終了ボタンの前）に挿入
+        insert_at = bbl.indexOf(self.btn_title_exit)
+        for spec in var.get("buttons", []):
+            text = spec.get("text", "")
+            target = spec.get("targetScene", "")
+            btn = QPushButton(text, self.title_btn_box)
+            btn.setObjectName("titleBtn")
+            btn.setFixedWidth(self.btn_new.width() or 280)
+            btn.clicked.connect(lambda checked=False, t=target: self.start_at(t) if t else None)
+            bbl.insertWidget(insert_at, btn)
+            insert_at += 1
+            self._title_extra_buttons.append(btn)
 
     def _layout_title(self):
         """タイトル文字/ロゴとボタン群を、レイアウト設定に従い配置する。"""

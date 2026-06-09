@@ -17,7 +17,7 @@ NUM_OPS = [("==", "="), ("!=", "≠"), (">", ">"), (">=", "≥"),
            ("<", "<"), ("<=", "≤")]
 ITEM_OPS = [("has", "所持している"), ("notHas", "所持していない")]
 KINDS = [("var", "変数"), ("gauge", "ゲージ"), ("item", "アイテム"),
-         ("ending", "エンディング到達回数")]
+         ("ending", "エンディング到達回数"), ("allEndings", "全エンディング解放")]
 
 
 class _TermRow(QWidget):
@@ -110,8 +110,11 @@ class _TermRow(QWidget):
         self._set_combo(self.op_cb, self.term.get("op", ops[0][0]))
         self.op_cb.blockSignals(False)
 
-        # value はアイテム時は不要
-        self.value_edit.setVisible(kind != "item")
+        # 全エンディング解放は引数なし。アイテムは値不要。
+        no_args = (kind == "allEndings")
+        self.ref_cb.setVisible(not no_args)
+        self.op_cb.setVisible(not no_args)
+        self.value_edit.setVisible(kind != "item" and not no_args)
         self.value_edit.setText(str(self.term.get("value", "")))
 
     def _sync(self):

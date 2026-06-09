@@ -484,13 +484,27 @@
   $("btn-continue").onclick = beginContinue;
 
   // ---------------- タイトル画面 ----------------
+  function matchedTitleVariation() {
+    const vars = DATA.meta.titleVariations || [];
+    if (!vars.length) return null;
+    const ctx = { variables: {}, gauges: {}, items: [], system: systemData,
+                  _all_ending_ids: (DATA.endings || []).map((e) => e.id) };
+    for (const v of vars) {
+      if (window.NovelEngine.evaluateCondition(v.condition, ctx)) return v;
+    }
+    return null;
+  }
+
   function showTitle() {
     titleMode = true;
     ["ov-name", "ov-items", "ov-save", "ov-ending"].forEach(hideOverlay);
     elChoices.style.display = "none";
     setGameChrome(false);
+    // タイトル演出（条件を満たす最初の演出で上書き）
+    const tvar = matchedTitleVariation();
+    buildTitleExtraButtons(tvar);
     // タイトルロゴ画像があれば文字の代わりに表示
-    const logo = DATA.meta.titleLogoImage || "";
+    const logo = (tvar && tvar.logo) || DATA.meta.titleLogoImage || "";
     if (logo) {
       $("title-logo").src = logo; $("title-logo").style.display = "block";
       $("title-name").style.display = "none";
@@ -511,11 +525,32 @@
     // つづきから：セーブがあれば有効
     const hasSave = readSlots().some((s) => s);
     $("btn-continue").disabled = !hasSave;
-    // タイトル背景・BGM
-    setTitleBg(DATA.meta.titleBg || "");
+    // タイトル背景・BGM（演出があれば上書き）
+    setTitleBg((tvar && tvar.bg) || DATA.meta.titleBg || "");
     curBgm = null; // 強制的に切り替え
-    updateBgmById(DATA.meta.titleBgm || "");
+    updateBgmById((tvar && tvar.bgm) || DATA.meta.titleBgm || "");
     showOverlay("ov-title");
+  }
+
+  let titleExtraButtons = [];
+  function buildTitleExtraButtons(tvar) {
+    titleExtraButtons.forEach((b) => b.remove());
+    titleExtraButtons = [];
+    if (!tvar) return;
+    const cont = document.querySelector(".title-buttons");
+    (tvar.buttons || []).forEach((spec) => {
+      const btn = document.createElement("button");
+      btn.className = "title-btn";
+      btn.textContent = spec.text || "";
+      btn.onclick = () => {
+        if (spec.targetScene) {
+          titleMode = false; hideOverlay("ov-title"); setGameChrome(true);
+          present(rt.start(spec.targetScene));
+        }
+      };
+      cont.appendChild(btn);   // つづきから の後ろに追加
+      titleExtraButtons.push(btn);
+    });
   }
 
   function setTitleBg(bgId) {

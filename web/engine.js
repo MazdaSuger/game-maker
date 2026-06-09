@@ -75,6 +75,12 @@
       const cnt = (sys.endings || {})[ref] || 0;
       return compare(toNumber(cnt), op, toNumber(raw));
     }
+    if (kind === "allEndings") {
+      const ids = state._all_ending_ids || [];
+      if (!ids.length) return false;
+      const ec = (state.system || {}).endings || {};
+      return ids.every((i) => toNumber(ec[i] || 0) >= 1);
+    }
     if (kind === "var") {
       const val = readVar(state, ref);
       if (typeof val === "boolean") {
@@ -183,6 +189,7 @@
     st.cmd_index = 0;
     this._initSystemVars();
     st.system = this.system;
+    st._all_ending_ids = (this.project.endings || []).map((e) => e.id);
     this.state = st;
     this._pending = null;
     return this.advance();
@@ -191,6 +198,7 @@
   Runtime.prototype.loadState = function (state) {
     this._initSystemVars();
     state.system = this.system;
+    state._all_ending_ids = (this.project.endings || []).map((e) => e.id);
     this.state = state;
     this._pending = null;
     return this.advance();

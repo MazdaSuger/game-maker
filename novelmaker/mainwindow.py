@@ -21,6 +21,7 @@ from .editors import (
 )
 from .layout_editor import LayoutEditor
 from .flowchart import FlowchartTab
+from .title_editor import TitleVariationEditor
 from .player import PlayerWidget
 from .save import (
     SaveManager, SystemStore, default_save_dir,
@@ -358,6 +359,7 @@ class MainWindow(QMainWindow):
         self.ending_editor = EndingEditor(self.project)
         self.system_tab = SystemTab(self.project)
         self.layout_editor = LayoutEditor(self.project)
+        self.title_var_editor = TitleVariationEditor(self.project)
         self.flowchart_tab = FlowchartTab(self.project)
         self.settings_editor = SettingsEditor(self.project)
 
@@ -375,6 +377,7 @@ class MainWindow(QMainWindow):
             ("🔊 SE", self.se_editor),
             ("🏁 エンディング", self.ending_editor),
             ("🎨 レイアウト", self.layout_editor),
+            ("🎬 タイトル演出", self.title_var_editor),
             ("⚙ 設定", self.settings_editor),
         ]
         for label, w in self._editors:
@@ -385,6 +388,7 @@ class MainWindow(QMainWindow):
         self.scene_editor.testFromScene.connect(self.play_from)
         self.system_tab.changed.connect(self._on_project_changed)
         self.layout_editor.changed.connect(self._on_project_changed)
+        self.title_var_editor.changed.connect(self._on_project_changed)
         self.flowchart_tab.sceneOpenRequested.connect(self._open_scene_from_flowchart)
         self.tabs.currentChanged.connect(self._on_tab_changed)
 
