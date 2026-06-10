@@ -78,6 +78,33 @@ h3 { margin: 14px 0 8px; font-size: 15px; color: #aab4d8; }
 .modal h3 { margin-top: 0; }
 .modal .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
 
+/* フローチャート */
+.flow { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.flow-node { border: 1px solid #3a4566; border-radius: 8px; padding: 8px 10px; background: #11152a; }
+.flow-name { font-weight: bold; cursor: pointer; color: #cfe0ff; }
+.flow-name:hover { text-decoration: underline; }
+.flow-edge { font-size: 13px; color: #9fb0d8; margin: 4px 0 0 10px; }
+.flow-edge.dim { color: #6b7596; }
+
+/* 配置エディタ */
+.lay-stage { position: relative; width: 100%; max-width: 640px; aspect-ratio: 16/9;
+  background: #0a0d18 linear-gradient(135deg,#10152a,#0a0d18); border: 1px solid #44507a;
+  border-radius: 8px; margin: 8px 0; overflow: hidden; touch-action: none; }
+.lay-chip { position: absolute; background: rgba(58,109,240,.65); border: 1px solid #8fb0ff;
+  color: #fff; font-size: 12px; padding: 4px 7px; border-radius: 5px; cursor: grab;
+  white-space: nowrap; user-select: none; touch-action: none; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+.lay-chip.box { background: rgba(58,109,240,.22); display: flex; align-items: flex-start;
+  justify-content: flex-start; padding: 3px 5px; }
+.lay-chip.sel { background: rgba(240,150,40,.8); border-color: #ffd08a; z-index: 5; }
+.lay-panel { border: 1px solid #313a55; border-radius: 8px; padding: 10px; margin: 8px 0; }
+.lay-panel h3 { margin-top: 0; }
+.lay-srow { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.lay-srow .lay-slab { width: 84px; font-size: 13px; color: #aab; flex-shrink: 0; }
+.lay-srow input[type=range] { flex: 1; }
+.lay-srow .lay-snum { width: 44px; text-align: right; font-size: 13px; color: #cfe0ff; }
+.lay-picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.lay-picker button.active { background: #3a6df0; border-color: #5a8dff; }
+
 #playframe { position: fixed; inset: 0; z-index: 60; background: #000; border: none;
   width: 100%; height: 100%; }
 #playclose { position: fixed; top: 8px; right: 10px; z-index: 61; }

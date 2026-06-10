@@ -228,10 +228,11 @@
   //  ナビ & セクション
   // ============================================================
   const SECTIONS = [
-    ["scenes", "🎬 シーン"], ["characters", "🧑 キャラ"], ["items", "🎒 アイテム"],
-    ["variables", "🔢 変数"], ["systemVars", "🌐 システム変数"], ["gauges", "📊 ゲージ"],
-    ["backgrounds", "🖼 背景"], ["cg", "🌅 CG"], ["bgm", "🎵 BGM"], ["se", "🔊 SE"],
-    ["endings", "🏁 エンディング"], ["settings", "⚙ 設定"],
+    ["scenes", "🎬 シーン"], ["flow", "🗺 フローチャート"], ["characters", "🧑 キャラ"],
+    ["items", "🎒 アイテム"], ["variables", "🔢 変数"], ["systemVars", "🌐 システム変数"],
+    ["gauges", "📊 ゲージ"], ["backgrounds", "🖼 背景"], ["cg", "🌅 CG"],
+    ["bgm", "🎵 BGM"], ["se", "🔊 SE"], ["endings", "🏁 エンディング"],
+    ["layout", "📐 配置(位置/サイズ)"], ["titleVars", "✨ タイトル演出"], ["settings", "⚙ 設定"],
   ];
 
   function renderNav() {
@@ -246,6 +247,9 @@
     if (state.section === "scenes") return renderScenes(c);
     if (state.section === "settings") return renderSettings(c);
     if (state.section === "characters") return renderCharacters(c);
+    if (state.section === "flow") return renderFlow(c);
+    if (state.section === "layout") return renderLayout(c);
+    if (state.section === "titleVars") return renderTitleVars(c);
     return renderResource(c, state.section);
   }
 
@@ -457,6 +461,266 @@
     c.appendChild(field(m, { k: "font", label: "フォント名(任意)", t: "str" }, m));
     c.appendChild(field(m, { k: "fontPath", label: "取り込みフォント(任意)", t: "asset:font" }, m));
     c.appendChild(el("p", { class: "hint", text: "※ 画像/音声/フォントはこの端末から取り込むと、書き出したHTMLに埋め込まれます。" }));
+  }
+
+  // ============================================================
+  //  フローチャート（読み取り専用の関係図）
+  // ============================================================
+  function sceneEdges(scene) {
+    // 戻り値: [{to: sceneId, label}] と末尾フォールスルー情報
+    const edges = [];
+    (scene.commands || []).forEach((c) => {
+      if (c.type === "jump" && c.targetScene) edges.push({ to: c.targetScene, label: "移動" });
+      else if (c.type === "choice") (c.options || []).forEach((o) => {
+        if (o.targetScene) edges.push({ to: o.targetScene, label: "選: " + (o.text || "") });
+      });
+      else if (c.type === "if") {
+        if (c.targetTrue) edges.push({ to: c.targetTrue, label: "条件成立" });
+        if (c.targetFalse) edges.push({ to: c.targetFalse, label: "不成立" });
+      }
+    });
+    return edges;
+  }
+
+  function renderFlow(c) {
+    const P = state.project;
+    c.appendChild(el("h2", { text: "🗺 フローチャート" }));
+    c.appendChild(el("p", { class: "hint",
+      text: "各シーンの「シーン移動・選択肢・条件分岐」によるつながりを表示します（読み取り専用）。シーン名をタップで編集へ。" }));
+    if (!P.scenes.length) { c.appendChild(el("p", { class: "hint", text: "シーンがありません。" })); return; }
+    const nameOf = (id) => { const s = P.scenes.find((x) => x.id === id); return s ? s.name : "??"; };
+    const wrap = el("div", { class: "flow" });
+    P.scenes.forEach((s, i) => {
+      const node = el("div", { class: "flow-node" });
+      const head = el("div", { class: "flow-name", onclick: () => { state.section = "scenes"; state.sceneIdx = i; renderNav(); renderContent(); } },
+        ["🎬 " + (s.name || "(無題)")]);
+      node.appendChild(head);
+      const edges = sceneEdges(s);
+      if (edges.length) {
+        edges.forEach((e) => node.appendChild(el("div", { class: "flow-edge" }, ["└▶ " + e.label + " → " + nameOf(e.to)])));
+      } else {
+        // 明示的な遷移が無ければ次のシーンへ流れる（最後はエンドの可能性）
+        const nx = P.scenes[i + 1];
+        node.appendChild(el("div", { class: "flow-edge dim" }, [nx ? "└▶ （次のシーンへ）→ " + nx.name : "└▶ （シーン終了）"]));
+      }
+      wrap.appendChild(node);
+    });
+    c.appendChild(wrap);
+  }
+
+  // ============================================================
+  //  配置（コンポーネント位置・サイズ・表示/非表示）
+  // ============================================================
+  const LAYOUT_DEFAULT = {
+    message: { x: 4, y: 72, w: 92, h: 26 },
+    choices: { x: 50, y: 42, scale: 100 },
+    spriteLeft: { x: 25, y: 99, scale: 80 }, spriteCenter: { x: 50, y: 99, scale: 80 },
+    spriteRight: { x: 75, y: 99, scale: 80 },
+    gauges: { x: 1.2, y: 2, scale: 100 }, items: { x: 94, y: 2, scale: 100 },
+    menu: { x: 63, y: 9, scale: 100 }, titleName: { x: 50, y: 24, scale: 100 },
+    title: { x: 50, y: 52, scale: 100 },
+  };
+  // (key, ラベル, 種別, 非表示フラグ用キー)
+  const LAYOUT_ELEMENTS = [
+    ["message", "セリフ枠", "box", "message"],
+    ["spriteLeft", "立ち絵(左)", "sprite", "sprite"],
+    ["spriteCenter", "立ち絵(中)", "sprite", "sprite"],
+    ["spriteRight", "立ち絵(右)", "sprite", "sprite"],
+    ["choices", "選択肢", "point", "choices"],
+    ["gauges", "ゲージ", "point", "gauges"],
+    ["items", "アイテム", "point", "items"],
+    ["menu", "メニュー", "point", "menu"],
+    ["titleName", "タイトル文字", "point", "titleName"],
+    ["title", "タイトルボタン", "point", "title"],
+  ];
+
+  function layCfg(key) {
+    const L = state.project.layout || (state.project.layout = {});
+    if (!L[key]) L[key] = {};
+    return L[key];
+  }
+  function layVal(key, prop) {
+    const v = layCfg(key)[prop];
+    return v == null ? (LAYOUT_DEFAULT[key] || {})[prop] : v;
+  }
+
+  function renderLayout(c) {
+    state.layoutSel = state.layoutSel || "message";
+    c.appendChild(el("h2", { text: "📐 配置（位置・サイズ・表示）" }));
+    c.appendChild(el("p", { class: "hint",
+      text: "ステージ上の四角をドラッグして位置を調整。下のスライダーでサイズ、チェックで非表示にできます。" }));
+
+    const stage = el("div", { class: "lay-stage" });
+    function place(chip, key, type) {
+      chip.style.left = layVal(key, "x") + "%";
+      chip.style.top = layVal(key, "y") + "%";
+      chip.style.transform = type === "box" ? "translate(0,0)"
+        : type === "sprite" ? "translate(-50%,-100%)" : "translate(-50%,-50%)";
+      if (type === "box") { chip.style.width = layVal(key, "w") + "%"; chip.style.height = layVal(key, "h") + "%"; }
+    }
+    LAYOUT_ELEMENTS.forEach(([key, label, type, hideKey]) => {
+      if (layCfg(hideKey).hidden) return;  // 非表示要素はステージに出さない
+      const chip = el("div", { class: "lay-chip" + (key === state.layoutSel ? " sel" : "") +
+        (type === "box" ? " box" : ""), "data-k": key }, [label]);
+      place(chip, key, type);
+      // ドラッグ（ポインタ＝タッチ対応）
+      chip.addEventListener("pointerdown", (ev) => {
+        ev.preventDefault();
+        state.layoutSel = key; renderLayout(c);
+        const rect = stage.getBoundingClientRect();
+        const move = (e) => {
+          let nx = ((e.clientX - rect.left) / rect.width) * 100;
+          let ny = ((e.clientY - rect.top) / rect.height) * 100;
+          if (type === "box") { nx -= 0; ny -= 0; }  // 箱は左上アンカー
+          const cfg = layCfg(key);
+          cfg.x = Math.max(0, Math.min(100, Math.round(nx * 10) / 10));
+          cfg.y = Math.max(0, Math.min(100, Math.round(ny * 10) / 10));
+          const live = stage.querySelector('[data-k="' + key + '"]');
+          if (live) { live.style.left = cfg.x + "%"; live.style.top = cfg.y + "%"; }
+          syncSliders();
+        };
+        const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
+        window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+      });
+      stage.appendChild(chip);
+    });
+    c.appendChild(stage);
+
+    // ---- 選択中要素のコントロール ----
+    const panel = el("div", { class: "lay-panel" });
+    let sliderRefs = [];
+    function syncSliders() { sliderRefs.forEach((f) => f()); }
+    function buildPanel() {
+      panel.innerHTML = ""; sliderRefs = [];
+      const ent = LAYOUT_ELEMENTS.find((e) => e[0] === state.layoutSel);
+      if (!ent) return;
+      const [key, label, type, hideKey] = ent;
+      panel.appendChild(el("h3", { text: "選択中: " + label }));
+      const sliderRow = (lab, prop, min, max, step) => {
+        const row = el("div", { class: "lay-srow" });
+        row.appendChild(el("span", { class: "lay-slab", text: lab }));
+        const num = el("span", { class: "lay-snum" });
+        const rng = el("input", { type: "range", min, max, step, value: layVal(key, prop),
+          oninput: (e) => {
+            layCfg(key)[prop] = parseFloat(e.target.value);
+            num.textContent = e.target.value;
+            const live = stage.querySelector('[data-k="' + key + '"]');
+            if (live) {
+              live.style.left = layVal(key, "x") + "%"; live.style.top = layVal(key, "y") + "%";
+              if (type === "box") { live.style.width = layVal(key, "w") + "%"; live.style.height = layVal(key, "h") + "%"; }
+            }
+          } });
+        const sync = () => { rng.value = layVal(key, prop); num.textContent = layVal(key, prop); };
+        sliderRefs.push(sync); sync();
+        row.appendChild(rng); row.appendChild(num); return row;
+      };
+      panel.appendChild(sliderRow("X位置 (%)", "x", 0, 100, 0.5));
+      panel.appendChild(sliderRow("Y位置 (%)", "y", 0, 100, 0.5));
+      if (type === "box") {
+        panel.appendChild(sliderRow("幅 (%)", "w", 10, 100, 1));
+        panel.appendChild(sliderRow("高さ (%)", "h", 5, 100, 1));
+      } else {
+        panel.appendChild(sliderRow("サイズ (%)", "scale", 20, 200, 1));
+      }
+      // 非表示チェック
+      const hl = el("label", { class: "field inline" });
+      const cb = el("input", { type: "checkbox", onchange: (e) => { layCfg(hideKey).hidden = e.target.checked; renderLayout(c); } });
+      cb.checked = !!layCfg(hideKey).hidden;
+      hl.appendChild(cb);
+      hl.appendChild(el("span", { text: type === "sprite" ? "立ち絵をまとめて非表示" : "このコンポーネントを非表示" }));
+      panel.appendChild(hl);
+      // リセット
+      panel.appendChild(el("button", { onclick: () => {
+        const d = LAYOUT_DEFAULT[key] || {}; const cfg = layCfg(key);
+        ["x", "y", "w", "h", "scale"].forEach((p) => { if (d[p] != null) cfg[p] = d[p]; });
+        renderLayout(c);
+      } }, ["既定値に戻す"]));
+    }
+    buildPanel();
+    c.appendChild(panel);
+
+    // 要素切り替えボタン
+    const picker = el("div", { class: "lay-picker" });
+    LAYOUT_ELEMENTS.forEach(([key, label, , hideKey]) => {
+      const b = el("button", { class: key === state.layoutSel ? "active" : "",
+        onclick: () => { state.layoutSel = key; renderLayout(c); } },
+        [(layCfg(hideKey).hidden ? "🚫 " : "") + label]);
+      picker.appendChild(b);
+    });
+    c.appendChild(el("h3", { text: "要素を選択" }));
+    c.appendChild(picker);
+  }
+
+  // ============================================================
+  //  タイトル演出（条件で背景/BGM/ロゴ/色を差し替え＋ボタン追加）
+  // ============================================================
+  function newTitleVariation() {
+    return { id: uid("tv"), name: "新しい演出", bg: "", bgm: "", logo: "", color: "#ffffff",
+             condition: emptyCondition(), buttons: [] };
+  }
+
+  function renderTitleVars(c) {
+    const P = state.project;
+    const list = P.meta.titleVariations || (P.meta.titleVariations = []);
+    c.appendChild(el("h2", { text: "✨ タイトル演出" }));
+    c.appendChild(el("p", { class: "hint",
+      text: "条件（全エンディング解放・到達回数・システム変数など）を満たすと、タイトル画面の背景/BGM/ロゴ/文字色を差し替え、ボタンを追加します。上から順に評価され、最初に条件を満たした演出が適用されます。" }));
+
+    const listBox = el("div", { class: "list" });
+    list.forEach((v, i) => {
+      const it = el("div", { class: "item" + (i === (state.tvIdx || 0) ? " sel" : "") },
+        [el("span", { text: v.name || "(無題)" })]);
+      it.addEventListener("click", () => { state.tvIdx = i; renderTitleVars(c); });
+      listBox.appendChild(it);
+    });
+    c.appendChild(listBox);
+
+    const tb = el("div", { class: "toolbar" });
+    tb.appendChild(el("button", { class: "primary", onclick: () => { list.push(newTitleVariation()); state.tvIdx = list.length - 1; renderTitleVars(c); } }, ["＋追加"]));
+    if (list.length) {
+      tb.appendChild(el("button", { onclick: () => {
+        const i = state.tvIdx || 0; if (i > 0) { [list[i - 1], list[i]] = [list[i], list[i - 1]]; state.tvIdx = i - 1; renderTitleVars(c); } } }, ["▲"]));
+      tb.appendChild(el("button", { onclick: () => {
+        const i = state.tvIdx || 0; if (i < list.length - 1) { [list[i + 1], list[i]] = [list[i], list[i + 1]]; state.tvIdx = i + 1; renderTitleVars(c); } } }, ["▼"]));
+      tb.appendChild(el("button", { class: "danger", onclick: () => {
+        const i = state.tvIdx || 0; list.splice(i, 1); state.tvIdx = Math.max(0, i - 1); renderTitleVars(c); } }, ["削除"]));
+    }
+    c.appendChild(tb);
+
+    const v = list[state.tvIdx || 0];
+    if (!v) return;
+    if (!v.condition) v.condition = emptyCondition();
+    const form = el("div");
+    form.appendChild(field(v, { k: "name", label: "演出名", t: "str" }, v));
+    form.appendChild(field(v, { k: "bg", label: "タイトル背景", t: "select", src: "bg", none: "（既定の背景のまま）" }, v));
+    form.appendChild(field(v, { k: "bgm", label: "タイトルBGM", t: "select", src: "bgm", none: "（既定のBGMのまま）" }, v));
+    form.appendChild(field(v, { k: "logo", label: "ロゴ画像(任意)", t: "asset:image" }, v));
+    form.appendChild(field(v, { k: "color", label: "タイトル文字の色", t: "color" }, v));
+    form.appendChild(el("h3", { text: "適用条件（例：全エンディング解放）" }));
+    form.appendChild(conditionBuilder(v.condition));
+
+    // 追加ボタン群
+    form.appendChild(el("h3", { text: "タイトルに追加するボタン" }));
+    v.buttons = v.buttons || [];
+    const btnBox = el("div", { class: "opts" });
+    function renderBtns() {
+      btnBox.innerHTML = "";
+      v.buttons.forEach((spec, bi) => {
+        const row = el("div", { class: "term" });
+        row.appendChild(el("input", { type: "text", value: spec.text || "", placeholder: "ボタン文字",
+          oninput: (e) => spec.text = e.target.value, style: "flex:2" }));
+        const sel = el("select", { style: "flex:2", onchange: (e) => spec.targetScene = e.target.value });
+        sel.appendChild(el("option", { value: "" }, ["（移動先シーン）"]));
+        P.scenes.forEach((s) => { const o = el("option", { value: s.id }, [s.name]); if (s.id === spec.targetScene) o.selected = true; sel.appendChild(o); });
+        row.appendChild(sel);
+        row.appendChild(el("button", { class: "danger", onclick: () => { v.buttons.splice(bi, 1); renderBtns(); } }, ["✕"]));
+        btnBox.appendChild(row);
+      });
+    }
+    renderBtns();
+    form.appendChild(btnBox);
+    form.appendChild(el("button", { onclick: () => { v.buttons.push({ text: "おまけ", targetScene: "" }); renderBtns(); } }, ["＋ ボタンを追加"]));
+    c.appendChild(form);
   }
 
   // ============================================================
