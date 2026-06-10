@@ -11,14 +11,14 @@
     <div id="topbar">
       <div class="brand">📖 ノベルメーカー Web</div>
       <button id="btn-new">新規</button>
-      <button id="btn-open">開く(.nvproj)</button>
+      <label id="btn-open" for="file-open" class="fakebtn" role="button" tabindex="0">開く(.nvproj)</label>
       <button id="btn-save" class="primary">保存(.nvproj)</button>
       <button id="btn-play">▶ テスト</button>
       <button id="btn-export">⬇ HTML書き出し</button>
       <span class="spacer"></span>
       <span class="pname" id="pname"></span>
-      <!-- iPad/iOS では accept に独自拡張子があると選べないため指定しない -->
-      <input type="file" id="file-open" hidden />
+      <!-- iOS対策: accept指定なし＋labelで直接ピッカーを開く（display:noneにしない） -->
+      <input type="file" id="file-open" class="vhide" />
     </div>
 
     <div id="body">

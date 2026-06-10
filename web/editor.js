@@ -535,11 +535,19 @@
 
   // ---- 起動 ----
   $("btn-new").onclick = () => { if (confirm("新規プロジェクトを作成しますか？（未保存の変更は失われます）")) setProject(makeProjectDefault(), ""); };
-  $("btn-open").onclick = () => $("file-open").click();
+  // 開くは <label for="file-open"> がネイティブにピッカーを開く（iOS対策）。
+  // キーボード操作用の保険のみ JS で対応。
+  $("btn-open").addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") $("file-open").click(); });
   $("file-open").onchange = (e) => {
     const f = e.target.files[0]; if (!f) return;
     const r = new FileReader();
-    r.onload = () => { try { setProject(JSON.parse(r.result), f.name); } catch (err) { alert("読み込みに失敗: " + err); } };
+    r.onload = () => {
+      try {
+        const data = JSON.parse(String(r.result).replace(/^﻿/, ""));
+        setProject(data, f.name);
+      } catch (err) { alert("読み込みに失敗しました。\n" + err); }
+    };
+    r.onerror = () => alert("ファイルを読み込めませんでした。");
     r.readAsText(f); e.target.value = "";
   };
   $("btn-save").onclick = saveProject;

@@ -18,6 +18,13 @@ button:hover { background: #3a4470; }
 button.primary { background: #3a6df0; border-color: #5a8dff; font-weight: bold; }
 button.danger { background: #6d2a2a; border-color: #a04a4a; }
 button:disabled { opacity: .45; cursor: default; }
+.fakebtn { display: inline-block; background: #2a3050; color: #e8ecff;
+  border: 1px solid #44507a; border-radius: 7px; padding: 8px 12px; cursor: pointer;
+  user-select: none; }
+.fakebtn:hover { background: #3a4470; }
+/* 画面外に追いやる視覚的非表示（display:none にしないこと＝iOSでpicker可） */
+.vhide { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 #body { flex: 1; display: flex; min-height: 0; }
 #nav { width: 150px; background: #141826; border-right: 1px solid #313a55;
