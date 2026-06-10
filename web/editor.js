@@ -551,7 +551,14 @@
     return L[key];
   }
   function layVal(key, prop) {
-    const v = layCfg(key)[prop];
+    const cfg = layCfg(key);
+    // 縦横比(scaleX/scaleY)が未設定なら、従来の uniform scale にフォールバック
+    if ((prop === "scaleX" || prop === "scaleY") && cfg[prop] == null) {
+      const s = cfg.scale;
+      const d = (LAYOUT_DEFAULT[key] || {}).scale;
+      return s == null ? (d == null ? 100 : d) : s;
+    }
+    const v = cfg[prop];
     return v == null ? (LAYOUT_DEFAULT[key] || {})[prop] : v;
   }
 
@@ -631,8 +638,12 @@
       if (type === "box") {
         panel.appendChild(sliderRow("幅 (%)", "w", 10, 100, 1));
         panel.appendChild(sliderRow("高さ (%)", "h", 5, 100, 1));
+      } else if (type === "sprite") {
+        panel.appendChild(sliderRow("サイズ(高さ %)", "scale", 20, 200, 1));
       } else {
-        panel.appendChild(sliderRow("サイズ (%)", "scale", 20, 200, 1));
+        // point 系は横・縦を個別に＝縦横比を変えられる
+        panel.appendChild(sliderRow("横幅 (%)", "scaleX", 20, 300, 1));
+        panel.appendChild(sliderRow("縦高さ (%)", "scaleY", 20, 300, 1));
       }
       // 非表示チェック
       const hl = el("label", { class: "field inline" });
@@ -645,6 +656,7 @@
       panel.appendChild(el("button", { onclick: () => {
         const d = LAYOUT_DEFAULT[key] || {}; const cfg = layCfg(key);
         ["x", "y", "w", "h", "scale"].forEach((p) => { if (d[p] != null) cfg[p] = d[p]; });
+        delete cfg.scaleX; delete cfg.scaleY;   // 縦横比のカスタムも解除
         renderLayout(c);
       } }, ["既定値に戻す"]));
     }

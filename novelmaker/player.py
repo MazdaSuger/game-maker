@@ -344,24 +344,39 @@ class PlayerWidget(QWidget):
         L = merged_layout(self.project)
         return self._num(L.get(elem, {}).get("scale", 100), 100) / 100.0
 
+    def _comp_scale_xy(self, elem: str):
+        """横(scaleX)・縦(scaleY)の倍率を返す（縦横比対応）。未設定なら uniform。"""
+        L = merged_layout(self.project)
+        d = L.get(elem, {})
+        base = self._num(d.get("scale", 100), 100)
+        sx = self._num(d.get("scaleX", base), base) / 100.0
+        sy = self._num(d.get("scaleY", base), base) / 100.0
+        return sx, sy
+
     def _size_qss(self) -> str:
-        """文字サイズ（セリフ系）と各コンポーネントのサイズ(%)を反映する。"""
+        """文字サイズ（セリフ系）と各コンポーネントのサイズ(%)を反映する。
+
+        縦横比に対応するため、横方向(scaleX)は左右パディング/幅に、
+        縦方向(scaleY)はフォントサイズ/上下パディングに割り当てる。
+        """
         fs = self._num(self.project.meta.get("fontScale", 100), 100) / 100.0
         mfs = fs * self._num(self.project.meta.get("msgFontScale", 100), 100) / 100.0
-        ch = self._comp_scale("choices")
-        mn = self._comp_scale("menu")
+        chx, chy = self._comp_scale_xy("choices")
+        mnx, mny = self._comp_scale_xy("menu")
         its = self._comp_scale("items")
-        tn = self._comp_scale("titleName")
-        tb = self._comp_scale("title")
+        tnx, tny = self._comp_scale_xy("titleName")
+        tbx, tby = self._comp_scale_xy("title")
         r = [
             f'#msgText {{ font-size: {19 * mfs:.0f}px; }}',
             f'#nameLabel {{ font-size: {18 * fs:.0f}px; }}',
-            f'#choiceBtn {{ font-size: {17 * ch:.0f}px; '
-            f'padding: {14 * ch:.0f}px {20 * ch:.0f}px; }}',
-            f'#menuBtn {{ font-size: {13 * mn:.0f}px; }}',
-            f'#titleName {{ font-size: {44 * tn:.0f}px; }}',
-            f'#titleBtn {{ font-size: {18 * tb:.0f}px; '
-            f'padding: {14 * tb:.0f}px {24 * tb:.0f}px; }}',
+            f'#choiceBtn {{ font-size: {17 * chy:.0f}px; '
+            f'padding: {14 * chy:.0f}px {20 * chx:.0f}px; }}',
+            f'#menuBtn {{ font-size: {13 * mny:.0f}px; '
+            f'padding-left: {8 * mnx:.0f}px; padding-right: {8 * mnx:.0f}px; }}',
+            f'#titleName {{ font-size: {44 * tny:.0f}px; '
+            f'padding-left: {28 * tnx:.0f}px; padding-right: {28 * tnx:.0f}px; }}',
+            f'#titleBtn {{ font-size: {18 * tby:.0f}px; '
+            f'padding: {14 * tby:.0f}px {24 * tbx:.0f}px; }}',
             f'#itemsBtn {{ font-size: {20 * its:.0f}px; '
             f'border-radius: {22 * its:.0f}px; }}',
         ]
@@ -398,7 +413,7 @@ class PlayerWidget(QWidget):
                 rules.append(
                     f'{selector} {{ border-image: url("{_qss_url(path)}") '
                     f'0 0 0 0 stretch stretch; background: transparent; '
-                    f'border: none; {extra} }}')
+                    f'border: none; border-radius: 0; {extra} }}')
 
         img_rule("#msgWin", t.get("msgWindowImage", ""))
         img_rule("#choiceBtn", t.get("choiceButtonImage", ""))
@@ -500,7 +515,7 @@ class PlayerWidget(QWidget):
         """タイトル文字/ロゴとボタン群を、レイアウト設定に従い配置する。"""
         w, h = self.width(), self.height()
         L = merged_layout(self.project)
-        self.btn_title_exit.setFixedWidth(int(280 * self._comp_scale("title")))
+        self.btn_title_exit.setFixedWidth(int(280 * self._comp_scale_xy("title")[0]))
         # タイトル文字・ボックス（追加/終了ボタン）の配置
         for box, key in ((self.title_name_box, "titleName"),
                          (self.title_btn_box, "title")):
@@ -512,7 +527,7 @@ class PlayerWidget(QWidget):
         # 「はじめから」「つづきから」を個別配置（中央アンカー）
         for btn, key in ((self.btn_new, "titleStart"),
                          (self.btn_continue, "titleContinue")):
-            btn.setFixedWidth(int(280 * self._comp_scale(key)))
+            btn.setFixedWidth(int(280 * self._comp_scale_xy(key)[0]))
             btn.adjustSize()
             d = L.get(key, {})
             cx = int(d.get("x", 50) / 100.0 * w)

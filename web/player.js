@@ -539,14 +539,14 @@
     // 配置（レイアウト）
     const tn = layoutOf("titleName"), tb = layoutOf("title");
     Object.assign($("title-namebox").style, { left: tn.x + "%", top: tn.y + "%",
-      transform: `translate(-50%,-50%) scale(${compScale("titleName")})` });
+      transform: `translate(-50%,-50%) scale(${compScaleXY("titleName")})` });
     // 「はじめから」「つづきから」を個別配置（タイトル直下の絶対配置）
     placeCoreTitleBtn($("btn-new"), "titleStart");
     placeCoreTitleBtn($("btn-continue"), "titleContinue");
     // 追加/終了ボタン群のボックス
     const tbtns = document.querySelector(".title-buttons");
     tbtns.style.left = tb.x + "%"; tbtns.style.top = tb.y + "%";
-    tbtns.style.transform = `translate(-50%,-50%) scale(${compScale("title")})`;
+    tbtns.style.transform = `translate(-50%,-50%) scale(${compScaleXY("title")})`;
     // つづきから：セーブがあれば有効
     const hasSave = readSlots().some((s) => s);
     $("btn-continue").disabled = !hasSave;
@@ -648,6 +648,15 @@
     const s = layoutOf(key).scale;
     return (s === undefined ? 100 : s) / 100;
   }
+  // 縦横比を変えられるよう、横(scaleX)・縦(scaleY)を個別に返す。
+  // 未設定なら従来の uniform scale を使う。
+  function compScaleXY(key) {
+    const L = layoutOf(key);
+    const base = L.scale === undefined ? 100 : L.scale;
+    const sx = (L.scaleX === undefined ? base : L.scaleX) / 100;
+    const sy = (L.scaleY === undefined ? base : L.scaleY) / 100;
+    return sx + "," + sy;
+  }
   // 「はじめから」「つづきから」をタイトル直下へ移し、個別の座標に配置する。
   function placeCoreTitleBtn(btn, key) {
     if (!btn) return;
@@ -657,7 +666,7 @@
     }
     const d = layoutOf(key);
     btn.style.left = d.x + "%"; btn.style.top = d.y + "%";
-    btn.style.transform = `translate(-50%,-50%) scale(${compScale(key)})`;
+    btn.style.transform = `translate(-50%,-50%) scale(${compScaleXY(key)})`;
   }
 
   function applyLayout() {
@@ -667,18 +676,18 @@
         height: m.h + "%", bottom: "auto" });
     const g = layoutOf("gauges");
     Object.assign(elGauges.style, { left: g.x + "%", top: g.y + "%", right: "auto",
-      transform: `scale(${compScale("gauges")})`, transformOrigin: "top left" });
+      transform: `scale(${compScaleXY("gauges")})`, transformOrigin: "top left" });
     const it = layoutOf("items");
     Object.assign($("items-btn").style,
       { left: it.x + "%", top: it.y + "%", right: "auto",
-        transform: `scale(${compScale("items")})`, transformOrigin: "top left" });
+        transform: `scale(${compScaleXY("items")})`, transformOrigin: "top left" });
     const mn = layoutOf("menu");
     Object.assign($("menu").style, { left: mn.x + "%", top: mn.y + "%", right: "auto",
-      transform: `scale(${compScale("menu")})`, transformOrigin: "top left" });
+      transform: `scale(${compScaleXY("menu")})`, transformOrigin: "top left" });
     const c = layoutOf("choices");
     Object.assign(elChoices.style,
       { left: c.x + "%", top: c.y + "%",
-        transform: `translate(-50%,-50%) scale(${compScale("choices")})` });
+        transform: `translate(-50%,-50%) scale(${compScaleXY("choices")})` });
     // フォントサイズ（セリフ系）
     const fscale = (DATA.meta.fontScale || 100) / 100;
     const mscale = fscale * (DATA.meta.msgFontScale || 100) / 100;
@@ -700,7 +709,9 @@
     const bg = (sel, path) => {
       if (path) rules.push(
         `${sel}{background-image:url("${path}");background-size:100% 100%;` +
-        `background-repeat:no-repeat;border-image:none;}`);
+        `background-repeat:no-repeat;border-image:none;` +
+        // 取り込み画像だけが見えるよう、元のデザイン（背景色/枠線/角丸/影）を消す
+        `background-color:transparent;border:0;border-radius:0;box-shadow:none;}`);
     };
     bg("#msgwin", t.msgWindowImage);
     bg(".choice-btn", t.choiceButtonImage);
