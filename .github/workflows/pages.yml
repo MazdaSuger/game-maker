@@ -5,7 +5,7 @@ name: Deploy Web Editor (Pages)
 # Windows/Mac で作った .nvproj を読み込み、編集・テスト・書き出しできる。
 on:
   push:
-    branches: ["main", "master"]
+    branches: ["main", "master", "claude/ecstatic-cori-F2m66"]
     paths: ["web/**", ".github/workflows/pages.yml"]
   workflow_dispatch:
 
