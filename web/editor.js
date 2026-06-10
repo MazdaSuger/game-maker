@@ -99,9 +99,9 @@
     return wrap;
   }
 
+  let _assetSeq = 0;
   function assetField(obj, fd) {
     const kind = fd.t.split(":")[1] || "image";
-    const accept = { image: "image/*", audio: "audio/*", font: ".ttf,.otf,.woff,.woff2" }[kind] || "*/*";
     const box = el("div", { class: "assetrow" });
     const name = el("span", { class: "name" });
     const update = () => {
@@ -110,13 +110,21 @@
       box.querySelectorAll("img.thumb").forEach((i) => i.remove());
       if (kind === "image" && v) box.insertBefore(el("img", { class: "thumb", src: v }), name);
     };
-    const file = el("input", { type: "file", accept, style: "display:none", onchange: (e) => {
-      const f = e.target.files[0]; if (!f) return;
+    const inputId = "asset-" + (_assetSeq++);
+    // iOS対策: display:none にせず視覚的非表示(.vhide)、label[for] でネイティブに
+    // ピッカーを開く。accept は画像のみ image/* で絞り込み、音声/フォントは
+    // 端末によってファイルがグレーアウトするため指定しない。
+    const attrs = { type: "file", id: inputId, class: "vhide", onchange: (e) => {
+      const f = e.target.files[0]; if (!f) { return; }
       const r = new FileReader();
       r.onload = () => { obj[fd.k] = r.result; update(); };
+      r.onerror = () => alert("ファイルを読み込めませんでした。");
       r.readAsDataURL(f);
-    } });
-    const pick = el("button", { onclick: () => file.click() }, ["選択"]);
+      e.target.value = "";
+    } };
+    if (kind === "image") attrs.accept = "image/*";
+    const file = el("input", attrs);
+    const pick = el("label", { class: "fakebtn", for: inputId, role: "button", tabindex: "0" }, ["選択"]);
     const clr = el("button", { onclick: () => { obj[fd.k] = ""; update(); } }, ["クリア"]);
     box.appendChild(name); box.appendChild(pick); box.appendChild(clr); box.appendChild(file);
     update();
