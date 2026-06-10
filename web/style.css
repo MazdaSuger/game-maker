@@ -81,6 +81,8 @@ html, body {
   background: var(--panel); border: 2px solid var(--border);
   border-radius: 14px; padding: 14px 24px 18px; cursor: pointer;
 }
+/* メッセージ枠内の文字配置領域（枠いっぱい）。textX/textY はこの領域基準で移動 */
+#msg-content { position: absolute; left: 24px; right: 24px; top: 14px; bottom: 18px; }
 #msg-name { font-size: 18px; font-weight: bold; min-height: 24px; }
 #msg-text { font-size: 19px; line-height: 1.6; color: #f2f4ff; margin-top: 4px; }
 #msg-next {
