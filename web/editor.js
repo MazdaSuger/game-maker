@@ -573,11 +573,16 @@
 
     const stage = el("div", { class: "lay-stage" });
     function place(chip, key, type) {
+      let top = layVal(key, "y");
+      if (type === "box") {
+        const h = layVal(key, "h");
+        if (top + h > 100) top = Math.max(0, 100 - h);  // プレイヤーと同じく画面内に収める
+        chip.style.width = layVal(key, "w") + "%"; chip.style.height = h + "%";
+      }
       chip.style.left = layVal(key, "x") + "%";
-      chip.style.top = layVal(key, "y") + "%";
+      chip.style.top = top + "%";
       chip.style.transform = type === "box" ? "translate(0,0)"
         : type === "sprite" ? "translate(-50%,-100%)" : "translate(-50%,-50%)";
-      if (type === "box") { chip.style.width = layVal(key, "w") + "%"; chip.style.height = layVal(key, "h") + "%"; }
     }
     LAYOUT_ELEMENTS.forEach(([key, label, type, hideKey]) => {
       if (layCfg(hideKey).hidden) return;  // 非表示要素はステージに出さない
@@ -627,8 +632,14 @@
             num.textContent = e.target.value;
             const live = stage.querySelector('[data-k="' + key + '"]');
             if (live) {
-              live.style.left = layVal(key, "x") + "%"; live.style.top = layVal(key, "y") + "%";
-              if (type === "box") { live.style.width = layVal(key, "w") + "%"; live.style.height = layVal(key, "h") + "%"; }
+              live.style.left = layVal(key, "x") + "%";
+              let top = layVal(key, "y");
+              if (type === "box") {
+                const h = layVal(key, "h");
+                if (top + h > 100) top = Math.max(0, 100 - h);
+                live.style.width = layVal(key, "w") + "%"; live.style.height = h + "%";
+              }
+              live.style.top = top + "%";
             }
           } });
         const sync = () => { rng.value = layVal(key, prop); num.textContent = layVal(key, prop); };

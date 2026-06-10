@@ -716,9 +716,12 @@
 
   function applyLayout() {
     const m = layoutOf("message");
+    // 高さを大きくしても画面外へ出ないよう、下端が画面を超える場合は上へ寄せる
+    let mTop = m.y, mH = m.h;
+    if (mTop + mH > 100) mTop = Math.max(0, 100 - mH);
     Object.assign(elMsgWin.style,
-      { left: m.x + "%", top: m.y + "%", width: m.w + "%",
-        height: m.h + "%", bottom: "auto" });
+      { left: m.x + "%", top: mTop + "%", width: m.w + "%",
+        height: mH + "%", bottom: "auto" });
     // メッセージ枠内の文字位置（名前＋本文をまとめて、枠の大きさ基準で移動）
     const mtx = m.textX === undefined ? 0 : m.textX;
     const mty = m.textY === undefined ? 0 : m.textY;

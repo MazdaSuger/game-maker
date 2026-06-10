@@ -1207,9 +1207,13 @@ class PlayerWidget(QWidget):
         def px(v, total):
             return int(v / 100.0 * total)
 
-        # メッセージウィンドウ（左上座標＋サイズ）
+        # メッセージウィンドウ（左上座標＋サイズ）。高さを大きくしても画面外に
+        # 出ないよう、下端が画面を超える場合は上へ寄せる。
         m = L["message"]
-        self.msg_frame.setGeometry(px(m["x"], w), px(m["y"], h),
+        m_top = m["y"]
+        if m_top + m["h"] > 100:
+            m_top = max(0, 100 - m["h"])
+        self.msg_frame.setGeometry(px(m["x"], w), px(m_top, h),
                                    px(m["w"], w), px(m["h"], h))
         # ゲージパネル（左上座標）
         g = L["gauges"]
