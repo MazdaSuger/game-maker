@@ -255,6 +255,7 @@
 
   // ---- シーン編集 ----
   function renderScenes(c) {
+    c.innerHTML = "";
     const P = state.project;
     c.appendChild(el("h2", { text: "シーン" }));
     const row = el("div", { class: "row" });
@@ -374,6 +375,7 @@
   };
 
   function renderResource(c, key) {
+    c.innerHTML = "";
     const def = RES[key];
     const P = state.project;
     const listProp = def.listProp || key;
@@ -405,6 +407,7 @@
 
   // ---- キャラ（表情差分つき） ----
   function renderCharacters(c) {
+    c.innerHTML = "";
     const P = state.project; const key = "characters";
     c.appendChild(el("h2", { text: "キャラ・表情" }));
     const row = el("div", { class: "row" });
@@ -448,6 +451,7 @@
 
   // ---- 設定 ----
   function renderSettings(c) {
+    c.innerHTML = "";
     const P = state.project; const m = P.meta;
     c.appendChild(el("h2", { text: "ゲーム設定" }));
     c.appendChild(field(m, { k: "title", label: "タイトル", t: "str" }, m));
@@ -483,6 +487,7 @@
   }
 
   function renderFlow(c) {
+    c.innerHTML = "";
     const P = state.project;
     c.appendChild(el("h2", { text: "🗺 フローチャート" }));
     c.appendChild(el("p", { class: "hint",
@@ -545,6 +550,7 @@
   }
 
   function renderLayout(c) {
+    c.innerHTML = "";
     state.layoutSel = state.layoutSel || "message";
     c.appendChild(el("h2", { text: "📐 配置（位置・サイズ・表示）" }));
     c.appendChild(el("p", { class: "hint",
@@ -660,6 +666,7 @@
   }
 
   function renderTitleVars(c) {
+    c.innerHTML = "";
     const P = state.project;
     const list = P.meta.titleVariations || (P.meta.titleVariations = []);
     c.appendChild(el("h2", { text: "✨ タイトル演出" }));
