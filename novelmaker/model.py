@@ -94,11 +94,14 @@ DEFAULT_LAYOUT = {
     "menu":    {"x": 63.0, "y": 9.0, "scale": 100.0},
     # タイトル画面
     "titleName": {"x": 50.0, "y": 24.0, "scale": 100.0},  # タイトル文字/ロゴ（中央）
-    "title":     {"x": 50.0, "y": 52.0, "scale": 100.0},  # ボタン群（中央）
+    "titleStart":    {"x": 50.0, "y": 50.0, "scale": 100.0},  # 「はじめから」ボタン
+    "titleContinue": {"x": 50.0, "y": 58.0, "scale": 100.0},  # 「つづきから」ボタン
+    "title":     {"x": 50.0, "y": 70.0, "scale": 100.0},  # 追加/終了ボタン群（中央）
 }
 
 # サイズ(scale)を持つ point 系コンポーネント
-SCALE_COMPONENTS = ["choices", "gauges", "items", "menu", "titleName", "title"]
+SCALE_COMPONENTS = ["choices", "gauges", "items", "menu", "titleName",
+                    "titleStart", "titleContinue", "title"]
 
 # 立ち絵スロット → レイアウトキー
 SPRITE_POS_KEY = {"left": "spriteLeft", "center": "spriteCenter", "right": "spriteRight"}
@@ -114,7 +117,9 @@ LAYOUT_ELEMENTS = [
     ("items",   "アイテム", "point"),
     ("menu",    "メニュー", "point"),
     ("titleName", "タイトル文字", "point"),
-    ("title",     "タイトルボタン", "point"),
+    ("titleStart",    "「はじめから」", "point"),
+    ("titleContinue", "「つづきから」", "point"),
+    ("title",     "タイトル追加/終了ボタン", "point"),
 ]
 
 # テーマ（コンポーネントの取り込み画像）
@@ -122,6 +127,7 @@ DEFAULT_THEME = {
     "msgWindowImage": "",     # セリフ枠の背景画像
     "choiceButtonImage": "",  # 選択肢ボタンの背景画像
     "titleButtonImage": "",   # タイトルボタンの背景画像
+    "titleFrameImage": "",    # タイトル文字/ロゴの背景枠画像
     "itemsButtonImage": "",   # アイテムボタンの画像
     "nameBoxImage": "",       # 名前入力の枠（コンポーネント枠）背景
     "nameFieldImage": "",     # 名前入力の入力欄背景
@@ -129,6 +135,7 @@ DEFAULT_THEME = {
 
 THEME_FIELDS = [
     ("msgWindowImage", "セリフ枠の背景"),
+    ("titleFrameImage", "タイトルの背景枠"),
     ("choiceButtonImage", "選択肢ボタンの背景"),
     ("titleButtonImage", "タイトルボタンの背景"),
     ("itemsButtonImage", "アイテムボタンの画像"),
@@ -268,6 +275,19 @@ def migrate_project(data: dict) -> dict:
             lay.setdefault("spriteRight", {"x": min(92.0, cx + 25), "y": y, "scale": sc})
             # "sprite" は非表示フラグだけ残す
             lay["sprite"] = {k: v for k, v in s.items() if k == "hidden"}
+    # 旧：単一 "title" ボタン群 → 「はじめから/つづきから」を個別配置へ
+    if isinstance(lay, dict) and lay.get("title") and "titleStart" not in lay:
+        t = lay["title"]
+        bx = float(t.get("x", 50)); by = float(t.get("y", 52)); bs = float(t.get("scale", 100))
+        lay.setdefault("titleStart", {"x": bx, "y": by, "scale": bs})
+        lay.setdefault("titleContinue", {"x": bx, "y": min(100.0, by + 7), "scale": bs})
+        # 追加/終了ボタン群は少し下へ
+        lay["title"] = {"x": bx, "y": min(100.0, by + 18), "scale": bs}
+    # 新規メタの既定値補完
+    meta = data.setdefault("meta", {})
+    meta.setdefault("msgFontScale", 100)
+    theme = data.setdefault("theme", {})
+    theme.setdefault("titleFrameImage", "")
     return data
 
 
@@ -434,7 +454,8 @@ def default_project() -> dict:
             "titleBgm": bgm_main,   # タイトル画面のBGM
             "font": "",             # ゲーム内フォント（フォント名）
             "fontPath": "",         # 取り込みフォントファイル（任意）
-            "fontScale": 100,       # 文字サイズ（％）
+            "fontScale": 100,       # 文字サイズ（％）全体
+            "msgFontScale": 100,    # セリフ本文のフォントサイズ（％）
             "titleLogoImage": "",   # タイトル画面のロゴ画像（任意）
             "titleColor": "#ffffff", # タイトル文字の色
             "titleVariations": [],  # 条件付きタイトル演出（解放後に背景/BGM/ボタン変更）

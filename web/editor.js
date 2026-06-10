@@ -232,7 +232,8 @@
     ["items", "🎒 アイテム"], ["variables", "🔢 変数"], ["systemVars", "🌐 システム変数"],
     ["gauges", "📊 ゲージ"], ["backgrounds", "🖼 背景"], ["cg", "🌅 CG"],
     ["bgm", "🎵 BGM"], ["se", "🔊 SE"], ["endings", "🏁 エンディング"],
-    ["layout", "📐 配置(位置/サイズ)"], ["titleVars", "✨ タイトル演出"], ["settings", "⚙ 設定"],
+    ["layout", "📐 配置(位置/サイズ)"], ["theme", "🎨 テーマ画像"],
+    ["titleVars", "✨ タイトル演出"], ["settings", "⚙ 設定"],
   ];
 
   function renderNav() {
@@ -249,6 +250,7 @@
     if (state.section === "characters") return renderCharacters(c);
     if (state.section === "flow") return renderFlow(c);
     if (state.section === "layout") return renderLayout(c);
+    if (state.section === "theme") return renderTheme(c);
     if (state.section === "titleVars") return renderTitleVars(c);
     return renderResource(c, state.section);
   }
@@ -462,6 +464,7 @@
     c.appendChild(field(m, { k: "titleColor", label: "タイトル文字の色", t: "color" }, m));
     c.appendChild(field(m, { k: "titleLogoImage", label: "タイトルロゴ画像(任意)", t: "asset:image" }, m));
     c.appendChild(field(m, { k: "fontScale", label: "文字サイズ(%)", t: "num" }, m));
+    c.appendChild(field(m, { k: "msgFontScale", label: "セリフのフォントサイズ(%)", t: "num" }, m));
     c.appendChild(field(m, { k: "font", label: "フォント名(任意)", t: "str" }, m));
     c.appendChild(field(m, { k: "fontPath", label: "取り込みフォント(任意)", t: "asset:font" }, m));
     c.appendChild(el("p", { class: "hint", text: "※ 画像/音声/フォントはこの端末から取り込むと、書き出したHTMLに埋め込まれます。" }));
@@ -523,7 +526,8 @@
     spriteRight: { x: 75, y: 99, scale: 80 },
     gauges: { x: 1.2, y: 2, scale: 100 }, items: { x: 94, y: 2, scale: 100 },
     menu: { x: 63, y: 9, scale: 100 }, titleName: { x: 50, y: 24, scale: 100 },
-    title: { x: 50, y: 52, scale: 100 },
+    titleStart: { x: 50, y: 50, scale: 100 }, titleContinue: { x: 50, y: 58, scale: 100 },
+    title: { x: 50, y: 70, scale: 100 },
   };
   // (key, ラベル, 種別, 非表示フラグ用キー)
   const LAYOUT_ELEMENTS = [
@@ -536,7 +540,9 @@
     ["items", "アイテム", "point", "items"],
     ["menu", "メニュー", "point", "menu"],
     ["titleName", "タイトル文字", "point", "titleName"],
-    ["title", "タイトルボタン", "point", "title"],
+    ["titleStart", "「はじめから」", "point", "titleStart"],
+    ["titleContinue", "「つづきから」", "point", "titleContinue"],
+    ["title", "タイトル追加/終了ボタン", "point", "title"],
   ];
 
   function layCfg(key) {
@@ -731,6 +737,30 @@
   }
 
   // ============================================================
+  //  テーマ画像（枠・ボタン・名前入力などの取り込み画像）
+  // ============================================================
+  const THEME_FIELDS = [
+    ["msgWindowImage", "セリフ枠の背景"],
+    ["titleFrameImage", "タイトルの背景枠"],
+    ["choiceButtonImage", "選択肢ボタンの背景"],
+    ["titleButtonImage", "タイトルボタンの背景"],
+    ["itemsButtonImage", "アイテムボタンの画像"],
+    ["nameBoxImage", "名前入力の枠"],
+    ["nameFieldImage", "名前入力の入力欄"],
+  ];
+
+  function renderTheme(c) {
+    c.innerHTML = "";
+    const t = state.project.theme || (state.project.theme = {});
+    c.appendChild(el("h2", { text: "🎨 テーマ画像" }));
+    c.appendChild(el("p", { class: "hint",
+      text: "各コンポーネントの枠・ボタンの背景画像をこの端末から取り込めます（書き出すHTMLに埋め込まれます）。未設定なら既定のデザインのままです。" }));
+    THEME_FIELDS.forEach(([k, label]) => {
+      c.appendChild(field(t, { k, label, t: "asset:image" }, t));
+    });
+  }
+
+  // ============================================================
   //  読み込み / 保存 / 書き出し / テスト
   // ============================================================
   function migrate(p) {
@@ -738,6 +768,8 @@
     ["variables", "systemVars", "gauges", "characters", "items", "backgrounds", "cg", "bgm", "se", "endings", "scenes"].forEach((k) => { if (!Array.isArray(p[k])) p[k] = []; });
     p.layout = p.layout || {}; p.theme = p.theme || {};
     if (m.fontScale == null) m.fontScale = 100;
+    if (m.msgFontScale == null) m.msgFontScale = 100;
+    if (p.theme.titleFrameImage == null) p.theme.titleFrameImage = "";
     if (!Array.isArray(m.titleVariations)) m.titleVariations = [];
     (p.scenes || []).forEach((s) => (s.commands || []).forEach((c) => {
       if (c.type === "say") { if (c.exprId === "__none__") c.exprId = ""; if (c.hideSprite == null) c.hideSprite = false; if (!c.pos) c.pos = "center"; }

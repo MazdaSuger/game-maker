@@ -187,3 +187,5 @@ html, body {
 }
 .title-btn:hover { color: #9fe3ff; }
 .title-btn:disabled { color: #888; cursor: not-allowed; }
+/* 個別配置される「はじめから」「つづきから」 */
+.title-core-btn { position: absolute; transform: translate(-50%, -50%); }

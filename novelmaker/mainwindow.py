@@ -184,9 +184,18 @@ class SettingsEditor(QWidget):
             lambda v: (project.meta.__setitem__("fontScale", v),
                        setattr(project, "dirty", True)))
 
+        self.msgfont_spin = QSpinBox()
+        self.msgfont_spin.setRange(50, 300)
+        self.msgfont_spin.setSuffix(" %")
+        self.msgfont_spin.setValue(int(project.meta.get("msgFontScale", 100) or 100))
+        self.msgfont_spin.valueChanged.connect(
+            lambda v: (project.meta.__setitem__("msgFontScale", v),
+                       setattr(project, "dirty", True)))
+
         f.addRow("フォント:", self.font_cb)
         f.addRow("取り込みフォント(任意):", self.font_picker)
         f.addRow("文字サイズ:", self.fontsize_spin)
+        f.addRow("セリフのフォントサイズ:", self.msgfont_spin)
         fhint = QLabel("※ フォントはゲーム画面（プレイ／ブラウザ書き出し）に適用されます。\n"
                        "　取り込みフォント(.ttf/.otf)を指定すると、その書体が優先されます。")
         fhint.setStyleSheet("color:#888;")

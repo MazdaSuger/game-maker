@@ -255,7 +255,7 @@ class PlayerWidget(QWidget):
         self.title_overlay.setObjectName("titleOverlay")
         # タイトル文字/ロゴ・作者（個別配置できるよう絶対配置のコンテナ）
         self.title_name_box = QWidget(self.title_overlay)
-        self.title_name_box.setStyleSheet("background: transparent;")
+        self.title_name_box.setObjectName("titleNameBox")  # 背景枠画像のカスタム対象
         nbl = QVBoxLayout(self.title_name_box)
         nbl.setContentsMargins(0, 0, 0, 0)
         nbl.setAlignment(Qt.AlignCenter)
@@ -279,18 +279,20 @@ class PlayerWidget(QWidget):
         bbl = QVBoxLayout(self.title_btn_box)
         bbl.setContentsMargins(0, 0, 0, 0)
         bbl.setAlignment(Qt.AlignCenter)
-        self.btn_new = QPushButton("▶ はじめから", self.title_btn_box)
+        # 「はじめから」「つづきから」は個別に配置できるよう、タイトルの直接の子
+        # ウィジェットとして絶対配置する（_layout_title で位置を決める）。
+        self.btn_new = QPushButton("▶ はじめから", self.title_overlay)
         self.btn_new.setObjectName("titleBtn")
         self.btn_new.clicked.connect(self._begin_new)
-        self.btn_continue = QPushButton("⏵ つづきから", self.title_btn_box)
+        self.btn_continue = QPushButton("⏵ つづきから", self.title_overlay)
         self.btn_continue.setObjectName("titleBtn")
         self.btn_continue.clicked.connect(self._begin_continue)
+        # 終了ボタン＋演出の追加ボタンは従来どおりボックスにまとめる
         self.btn_title_exit = QPushButton("✕ 終了（エディタへ）", self.title_btn_box)
         self.btn_title_exit.setObjectName("titleBtn")
         self.btn_title_exit.clicked.connect(self._exit)
-        for b in (self.btn_new, self.btn_continue, self.btn_title_exit):
-            b.setFixedWidth(280)
-            bbl.addWidget(b)
+        self.btn_title_exit.setFixedWidth(280)
+        bbl.addWidget(self.btn_title_exit)
         self.title_overlay.hide()
 
         # エンドロール（縦スクロール）
@@ -345,13 +347,14 @@ class PlayerWidget(QWidget):
     def _size_qss(self) -> str:
         """文字サイズ（セリフ系）と各コンポーネントのサイズ(%)を反映する。"""
         fs = self._num(self.project.meta.get("fontScale", 100), 100) / 100.0
+        mfs = fs * self._num(self.project.meta.get("msgFontScale", 100), 100) / 100.0
         ch = self._comp_scale("choices")
         mn = self._comp_scale("menu")
         its = self._comp_scale("items")
         tn = self._comp_scale("titleName")
         tb = self._comp_scale("title")
         r = [
-            f'#msgText {{ font-size: {19 * fs:.0f}px; }}',
+            f'#msgText {{ font-size: {19 * mfs:.0f}px; }}',
             f'#nameLabel {{ font-size: {18 * fs:.0f}px; }}',
             f'#choiceBtn {{ font-size: {17 * ch:.0f}px; '
             f'padding: {14 * ch:.0f}px {20 * ch:.0f}px; }}',
@@ -400,6 +403,7 @@ class PlayerWidget(QWidget):
         img_rule("#msgWin", t.get("msgWindowImage", ""))
         img_rule("#choiceBtn", t.get("choiceButtonImage", ""))
         img_rule("#titleBtn", t.get("titleButtonImage", ""))
+        img_rule("#titleNameBox", t.get("titleFrameImage", ""))
         img_rule("#itemsBtn", t.get("itemsButtonImage", ""))
         img_rule("#nameBox", t.get("nameBoxImage", ""))
         img_rule("#nameField", t.get("nameFieldImage", ""), extra="color:#fff;")
@@ -496,10 +500,8 @@ class PlayerWidget(QWidget):
         """タイトル文字/ロゴとボタン群を、レイアウト設定に従い配置する。"""
         w, h = self.width(), self.height()
         L = merged_layout(self.project)
-        # ボタン幅をサイズ(%)に合わせる
-        tw = int(280 * self._comp_scale("title"))
-        for b in (self.btn_new, self.btn_continue, self.btn_title_exit):
-            b.setFixedWidth(tw)
+        self.btn_title_exit.setFixedWidth(int(280 * self._comp_scale("title")))
+        # タイトル文字・ボックス（追加/終了ボタン）の配置
         for box, key in ((self.title_name_box, "titleName"),
                          (self.title_btn_box, "title")):
             box.adjustSize()
@@ -507,6 +509,16 @@ class PlayerWidget(QWidget):
             cx = int(d.get("x", 50) / 100.0 * w)
             cy = int(d.get("y", 50) / 100.0 * h)
             box.move(cx - box.width() // 2, cy - box.height() // 2)
+        # 「はじめから」「つづきから」を個別配置（中央アンカー）
+        for btn, key in ((self.btn_new, "titleStart"),
+                         (self.btn_continue, "titleContinue")):
+            btn.setFixedWidth(int(280 * self._comp_scale(key)))
+            btn.adjustSize()
+            d = L.get(key, {})
+            cx = int(d.get("x", 50) / 100.0 * w)
+            cy = int(d.get("y", 50) / 100.0 * h)
+            btn.move(cx - btn.width() // 2, cy - btn.height() // 2)
+            btn.raise_()
 
     def start_at(self, scene_id: str):
         """タイトルを飛ばして指定シーンから開始（選択シーンのテスト用）。"""
@@ -1308,6 +1320,7 @@ PlayerWidget { background:#000; }
 #titleBtn:hover { color: #9fe3ff; }
 #titleBtn:disabled { color: #888; }
 #titleName { background: transparent; }
+#titleNameBox { background: transparent; }
 #overlayBox {
     background: #1a1e2e;
     border: 2px solid rgba(150,170,230,0.5);

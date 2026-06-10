@@ -50,6 +50,17 @@
   // BGM
   let audio = null, curBgm = null;
 
+  // 自動再生ブロック対策：最初のユーザー操作で、止まっているBGMを再生し直す。
+  // （テストプレイ＝iframe や、ブラウザの自動再生制限で無音になるのを防ぐ）
+  let audioUnlocked = false;
+  function unlockAudio() {
+    if (audioUnlocked) return;
+    audioUnlocked = true;
+    if (audio && audio.paused) { const p = audio.play(); if (p && p.catch) p.catch(() => {}); }
+  }
+  ["pointerdown", "touchstart", "keydown", "click"].forEach((ev) =>
+    document.addEventListener(ev, unlockAudio, { once: false, passive: true }));
+
   // ---------------- 提示 ----------------
   function present(ev) {
     current = ev;
@@ -529,6 +540,10 @@
     const tn = layoutOf("titleName"), tb = layoutOf("title");
     Object.assign($("title-namebox").style, { left: tn.x + "%", top: tn.y + "%",
       transform: `translate(-50%,-50%) scale(${compScale("titleName")})` });
+    // 「はじめから」「つづきから」を個別配置（タイトル直下の絶対配置）
+    placeCoreTitleBtn($("btn-new"), "titleStart");
+    placeCoreTitleBtn($("btn-continue"), "titleContinue");
+    // 追加/終了ボタン群のボックス
     const tbtns = document.querySelector(".title-buttons");
     tbtns.style.left = tb.x + "%"; tbtns.style.top = tb.y + "%";
     tbtns.style.transform = `translate(-50%,-50%) scale(${compScale("title")})`;
@@ -611,7 +626,9 @@
     items:   { x: 94, y: 2 },
     menu:    { x: 63, y: 9 },
     titleName: { x: 50, y: 24 },
-    title:     { x: 50, y: 52 },
+    titleStart:    { x: 50, y: 50 },
+    titleContinue: { x: 50, y: 58 },
+    title:     { x: 50, y: 70 },
   };
   const SPRITE_POS_KEY = { left: "spriteLeft", center: "spriteCenter", right: "spriteRight" };
 
@@ -630,6 +647,17 @@
   function compScale(key) {
     const s = layoutOf(key).scale;
     return (s === undefined ? 100 : s) / 100;
+  }
+  // 「はじめから」「つづきから」をタイトル直下へ移し、個別の座標に配置する。
+  function placeCoreTitleBtn(btn, key) {
+    if (!btn) return;
+    if (btn.parentElement !== $("ov-title")) {
+      $("ov-title").appendChild(btn);
+      btn.classList.add("title-core-btn");
+    }
+    const d = layoutOf(key);
+    btn.style.left = d.x + "%"; btn.style.top = d.y + "%";
+    btn.style.transform = `translate(-50%,-50%) scale(${compScale(key)})`;
   }
 
   function applyLayout() {
@@ -653,10 +681,11 @@
         transform: `translate(-50%,-50%) scale(${compScale("choices")})` });
     // フォントサイズ（セリフ系）
     const fscale = (DATA.meta.fontScale || 100) / 100;
+    const mscale = fscale * (DATA.meta.msgFontScale || 100) / 100;
     let fstyle = document.getElementById("nm-fontsize");
     if (!fstyle) { fstyle = document.createElement("style"); fstyle.id = "nm-fontsize"; document.head.appendChild(fstyle); }
     fstyle.textContent =
-      `#msg-text{font-size:${19 * fscale}px;} #msg-name{font-size:${18 * fscale}px;}`;
+      `#msg-text{font-size:${19 * mscale}px;} #msg-name{font-size:${18 * fscale}px;}`;
     // 立ち絵(#char)はステージ全面のコンテナ。各立ち絵は updateStage で配置。
   }
   function spriteX(pos, centerX) {
@@ -676,6 +705,7 @@
     bg("#msgwin", t.msgWindowImage);
     bg(".choice-btn", t.choiceButtonImage);
     bg(".title-btn", t.titleButtonImage);
+    bg("#title-namebox", t.titleFrameImage);
     bg("#items-btn", t.itemsButtonImage);
     bg("#ov-name .box", t.nameBoxImage);
     bg("#name-field", t.nameFieldImage);

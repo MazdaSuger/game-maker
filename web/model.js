@@ -192,7 +192,7 @@
     return {
       meta: { title: "新しいノベルゲーム", author: "", startScene: s,
               titleBg: "", titleBgm: "", font: "", fontPath: "", fontScale: 100,
-              titleLogoImage: "", titleColor: "#ffffff", titleVariations: [] },
+              msgFontScale: 100, titleLogoImage: "", titleColor: "#ffffff", titleVariations: [] },
       variables: [{ id: uid("var"), name: "playerName", type: "string", initial: "主人公" }],
       systemVars: [],
       gauges: [], characters: [{ id: hero, name: "キャラ1", color: "#ffb6c1",

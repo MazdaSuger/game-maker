@@ -61,7 +61,7 @@ def _iter_asset_fields(data: dict):
     theme = data.get("theme")
     if isinstance(theme, dict):
         for key in ("msgWindowImage", "choiceButtonImage",
-                    "titleButtonImage", "itemsButtonImage",
+                    "titleButtonImage", "titleFrameImage", "itemsButtonImage",
                     "nameBoxImage", "nameFieldImage"):
             if key in theme:
                 yield theme, key
