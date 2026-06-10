@@ -265,7 +265,7 @@ class PlayerWidget(QWidget):
         self.title_name = QLabel("", self.title_name_box)
         self.title_name.setObjectName("titleName")
         self.title_name.setAlignment(Qt.AlignCenter)
-        self.title_name.setWordWrap(True)
+        self.title_name.setWordWrap(False)   # 途中で改行しない（1行表示）
         self.title_author = QLabel("", self.title_name_box)
         self.title_author.setObjectName("titleAuthor")
         self.title_author.setAlignment(Qt.AlignCenter)

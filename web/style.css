@@ -173,7 +173,7 @@ html, body {
 #title-logo { display: none; max-width: 60vw; max-height: 34vh; }
 #title-name {
   font-size: 44px; font-weight: bold; color: #fff; padding: 8px 28px;
-  text-shadow: 0 2px 12px rgba(0,0,0,0.7);
+  text-shadow: 0 2px 12px rgba(0,0,0,0.7); white-space: nowrap;
 }
 #title-author { font-size: 16px; color: #cdd6f4; margin-top: 6px; }
 .title-buttons {
