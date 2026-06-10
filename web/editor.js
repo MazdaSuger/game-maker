@@ -870,7 +870,10 @@
 
   async function testPlay(startScene) {
     const proj = JSON.parse(JSON.stringify(state.project));
-    if (startScene) proj.meta = Object.assign({}, proj.meta, { startScene });
+    if (startScene) {
+      // 指定シーンから直接開始（タイトルを飛ばす）ためのマーカー
+      proj.meta = Object.assign({}, proj.meta, { startScene, __testStartScene: startScene });
+    }
     const html = await buildHtml(proj);
     const fr = $("playframe");
     fr.srcdoc = html; fr.classList.remove("hidden"); $("playclose").classList.remove("hidden");

@@ -598,6 +598,8 @@
       elBg.style.backgroundColor = "#101018";
     }
     elChar.innerHTML = "";
+    elCg.style.display = "none";            // 前の場面のCGを消す
+    elCg.style.backgroundImage = "none";
     elBlackout.classList.remove("on");
     elGauges.style.display = "none";
   }
@@ -801,5 +803,14 @@
   // 開始
   applyTheme();
   applyLayout();
-  showTitle();
+  // 「このシーンからテスト」: マーカーがあればタイトルを飛ばして直接そのシーンへ
+  const _testScene = DATA.meta && DATA.meta.__testStartScene;
+  if (_testScene) {
+    titleMode = false;
+    hideOverlay("ov-title");
+    setGameChrome(true);
+    present(rt.start(_testScene));
+  } else {
+    showTitle();
+  }
 })();
