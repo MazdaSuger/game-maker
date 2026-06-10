@@ -437,6 +437,10 @@ class PlayerWidget(QWidget):
             self.title_logo.hide()
             self.title_name.show()
             self.title_name.setText(self.project.title)
+        # タイトル文字の色（演出で上書き可）
+        color = (var.get("color") if var else "") or \
+            self.project.meta.get("titleColor", "#ffffff") or "#ffffff"
+        self.title_name.setStyleSheet(f"color: {color}; background: transparent;")
         author = self.project.meta.get("author", "")
         self.title_author.setText(f"作： {author}" if author else "")
         # つづきから：セーブが1つでもあれば有効

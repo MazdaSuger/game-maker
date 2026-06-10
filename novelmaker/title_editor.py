@@ -131,6 +131,10 @@ class TitleVariationEditor(QWidget):
                           lambda t: (v.__setitem__("logo", t), self._touch()),
                           "画像 (*.png *.jpg *.jpeg *.bmp *.webp)")
         f.addRow("ロゴ画像:", logo)
+        from .editors import ColorButton
+        color = ColorButton(v.get("color") or "#ffffff",
+                            lambda cc: (v.__setitem__("color", cc), self._touch()))
+        f.addRow("タイトル文字の色:", color)
         host = QWidget(); host.setLayout(f)
         self.form_layout.addWidget(host)
 

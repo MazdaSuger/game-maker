@@ -228,7 +228,7 @@ def new_title_variation() -> dict:
         "id": uid("tv"),
         "name": "新しい演出",
         "condition": empty_condition(),
-        "bg": "", "bgm": "", "logo": "",   # 空＝既定のまま
+        "bg": "", "bgm": "", "logo": "", "color": "",   # 空＝既定のまま
         "buttons": [],                     # [{text, targetScene}]
     }
 
@@ -436,6 +436,7 @@ def default_project() -> dict:
             "fontPath": "",         # 取り込みフォントファイル（任意）
             "fontScale": 100,       # 文字サイズ（％）
             "titleLogoImage": "",   # タイトル画面のロゴ画像（任意）
+            "titleColor": "#ffffff", # タイトル文字の色
             "titleVariations": [],  # 条件付きタイトル演出（解放後に背景/BGM/ボタン変更）
         },
         "variables": [

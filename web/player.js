@@ -520,6 +520,9 @@
       $("title-name").style.display = "";
       $("title-name").textContent = DATA.meta.title || "ノベルゲーム";
     }
+    // タイトル文字の色（演出で上書き可）
+    $("title-name").style.color =
+      (tvar && tvar.color) || DATA.meta.titleColor || "#ffffff";
     const author = DATA.meta.author || "";
     $("title-author").textContent = author ? "作： " + author : "";
     // 配置（レイアウト）

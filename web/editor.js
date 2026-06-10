@@ -451,6 +451,7 @@
     c.appendChild(field(m, { k: "startScene", label: "開始シーン", t: "select", src: "scene" }, m));
     c.appendChild(field(m, { k: "titleBg", label: "タイトル画面の背景", t: "select", src: "bg", none: "（なし）" }, m));
     c.appendChild(field(m, { k: "titleBgm", label: "タイトル画面のBGM", t: "select", src: "bgm", none: "（なし）" }, m));
+    c.appendChild(field(m, { k: "titleColor", label: "タイトル文字の色", t: "color" }, m));
     c.appendChild(field(m, { k: "titleLogoImage", label: "タイトルロゴ画像(任意)", t: "asset:image" }, m));
     c.appendChild(field(m, { k: "fontScale", label: "文字サイズ(%)", t: "num" }, m));
     c.appendChild(field(m, { k: "font", label: "フォント名(任意)", t: "str" }, m));

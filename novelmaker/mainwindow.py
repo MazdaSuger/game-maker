@@ -162,12 +162,18 @@ class SettingsEditor(QWidget):
             lambda t: (project.meta.__setitem__("titleLogoImage", t),
                        setattr(project, "dirty", True)),
             "画像 (*.png *.jpg *.jpeg *.bmp *.webp)")
+        from .editors import ColorButton
+        self.title_color = ColorButton(
+            project.meta.get("titleColor", "#ffffff"),
+            lambda c: (project.meta.__setitem__("titleColor", c),
+                       setattr(project, "dirty", True)))
 
         f.addRow("タイトル:", self.title_edit)
         f.addRow("作者:", self.author_edit)
         f.addRow("開始シーン:", self.start_cb)
         f.addRow("タイトル画面の背景:", self.titlebg_cb)
         f.addRow("タイトル画面のBGM:", self.titlebgm_cb)
+        f.addRow("タイトル文字の色:", self.title_color)
         f.addRow("タイトルロゴ画像(任意):", self.logo_picker)
         from PySide6.QtWidgets import QSpinBox
         self.fontsize_spin = QSpinBox()
