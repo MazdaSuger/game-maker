@@ -693,7 +693,12 @@
     if (!scopeEl) return;
     const { sx, sy } = scaleXYof(key);
     const t = compTextScale(key);
-    const tr = `scale(${sx ? t / sx : t}, ${sy ? t / sy : t})`;
+    const L = layoutOf(key);
+    const tx = L.textX === undefined ? 0 : L.textX;   // 文字の横位置オフセット(%)
+    const ty = L.textY === undefined ? 0 : L.textY;   // 文字の縦位置オフセット(%)
+    // translate を先に当てることで、移動量が箱の縦横比(sx,sy)に依存せず
+    // 文字サイズ(t)と文字幅にのみ比例する一定の挙動になる。
+    const tr = `translate(${tx}%, ${ty}%) scale(${sx ? t / sx : t}, ${sy ? t / sy : t})`;
     scopeEl.querySelectorAll(".nm-label").forEach((s) => { s.style.transform = tr; });
   }
   // 「はじめから」「つづきから」をタイトル直下へ移し、個別の座標に配置する。

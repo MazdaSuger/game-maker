@@ -358,6 +358,20 @@ class PlayerWidget(QWidget):
         L = merged_layout(self.project)
         return self._num(L.get(elem, {}).get("textScale", 100), 100) / 100.0
 
+    def _comp_text_off(self, elem: str):
+        """文字の横/縦位置オフセット(px)。textX/textY(%) を px 換算（基準40px）。"""
+        L = merged_layout(self.project)
+        d = L.get(elem, {})
+        ox = self._num(d.get("textX", 0), 0) / 100.0 * 40.0
+        oy = self._num(d.get("textY", 0), 0) / 100.0 * 40.0
+        return ox, oy
+
+    @staticmethod
+    def _pad4(top, right, bottom, left):
+        """負値を 0 に丸めた padding 文字列を返す。"""
+        return (f'padding: {max(0, top):.0f}px {max(0, right):.0f}px '
+                f'{max(0, bottom):.0f}px {max(0, left):.0f}px;')
+
     def _size_qss(self) -> str:
         """文字サイズ（セリフ系）と各コンポーネントのサイズ(%)を反映する。
 
@@ -367,23 +381,29 @@ class PlayerWidget(QWidget):
         fs = self._num(self.project.meta.get("fontScale", 100), 100) / 100.0
         mfs = fs * self._num(self.project.meta.get("msgFontScale", 100), 100) / 100.0
         chx, chy = self._comp_scale_xy("choices"); cht = self._comp_text_scale("choices")
+        chox, choy = self._comp_text_off("choices")
         mnx, mny = self._comp_scale_xy("menu"); mnt = self._comp_text_scale("menu")
         its = self._comp_scale("items"); itt = self._comp_text_scale("items")
         tnx, tny = self._comp_scale_xy("titleName"); tnt = self._comp_text_scale("titleName")
+        tnox, tnoy = self._comp_text_off("titleName")
         tbx, tby = self._comp_scale_xy("title"); tbt = self._comp_text_scale("title")
+        tbox, tboy = self._comp_text_off("title")
         # 文字サイズ(font-size)はコンポーネントの縦横比(scaleX/scaleY)に連動させず、
         # textScale で独立に決める。箱の縦横比は左右/上下パディングで表現する。
+        # 文字位置(textX/textY)は左右・上下パディングの非対称化で近似する。
         r = [
             f'#msgText {{ font-size: {19 * mfs:.0f}px; }}',
             f'#nameLabel {{ font-size: {18 * fs:.0f}px; }}',
             f'#choiceBtn {{ font-size: {17 * cht:.0f}px; '
-            f'padding: {14 * chy:.0f}px {20 * chx:.0f}px; }}',
+            + self._pad4(14 * chy + choy, 20 * chx - chox, 14 * chy - choy, 20 * chx + chox)
+            + ' }',
             f'#menuBtn {{ font-size: {13 * mnt:.0f}px; '
             f'padding-left: {8 * mnx:.0f}px; padding-right: {8 * mnx:.0f}px; }}',
             f'#titleName {{ font-size: {44 * tnt:.0f}px; '
-            f'padding-left: {28 * tnx:.0f}px; padding-right: {28 * tnx:.0f}px; }}',
+            + self._pad4(tnoy, 28 * tnx - tnox, -tnoy, 28 * tnx + tnox) + ' }',
             f'#titleBtn {{ font-size: {18 * tbt:.0f}px; '
-            f'padding: {14 * tby:.0f}px {24 * tbx:.0f}px; }}',
+            + self._pad4(14 * tby + tboy, 24 * tbx - tbox, 14 * tby - tboy, 24 * tbx + tbox)
+            + ' }',
             f'#itemsBtn {{ font-size: {20 * itt:.0f}px; '
             f'border-radius: {22 * its:.0f}px; }}',
         ]
