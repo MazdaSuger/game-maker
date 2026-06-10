@@ -13,12 +13,19 @@ macOS / Windows / Linux のランナー上でビルドし、成果物を Artifac
 - `NovelMaker-windows-x64.zip` … Windows 用（解凍して `NovelMaker.exe` を実行）
 - `NovelMaker-linux-x64.tar.gz` … Linux 用
 
-`v1.0.0` のような **タグを push** すると、自動で GitHub Release に添付します。
+`v1.0.0` のような **タグを push** すると、ビルド完了後に自動で
+**GitHub Release を作成**し、成果物（dmg / zip / tar.gz）を添付します。
 
 ```bash
 git tag v1.0.0
 git push origin v1.0.0
 ```
+
+タグを切らずにリリースしたい場合は、**Actions → Build Desktop Apps →
+Run workflow** で **「リリースタグ」** を入力して実行します（例: `v1.0.0`）。
+入力したタグが無ければ自動で作成され、Release が公開されます
+（「プレリリースとして公開する」も選べます）。入力を空にするとビルドのみ
+（Artifacts に出力）です。
 
 ## 手元でビルド
 
