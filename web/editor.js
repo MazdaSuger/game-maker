@@ -640,6 +640,8 @@
       if (type === "box") {
         panel.appendChild(sliderRow("幅 (%)", "w", 10, 100, 1));
         panel.appendChild(sliderRow("高さ (%)", "h", 5, 100, 1));
+        panel.appendChild(sliderRow("文字の横位置 (%)", "textX", -150, 150, 1));
+        panel.appendChild(sliderRow("文字の縦位置 (%)", "textY", -150, 150, 1));
       } else if (type === "sprite") {
         panel.appendChild(sliderRow("サイズ(高さ %)", "scale", 20, 200, 1));
       } else {

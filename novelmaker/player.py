@@ -380,6 +380,7 @@ class PlayerWidget(QWidget):
         """
         fs = self._num(self.project.meta.get("fontScale", 100), 100) / 100.0
         mfs = fs * self._num(self.project.meta.get("msgFontScale", 100), 100) / 100.0
+        mtox, mtoy = self._comp_text_off("message")
         chx, chy = self._comp_scale_xy("choices"); cht = self._comp_text_scale("choices")
         chox, choy = self._comp_text_off("choices")
         mnx, mny = self._comp_scale_xy("menu"); mnt = self._comp_text_scale("menu")
@@ -392,8 +393,10 @@ class PlayerWidget(QWidget):
         # textScale で独立に決める。箱の縦横比は左右/上下パディングで表現する。
         # 文字位置(textX/textY)は左右・上下パディングの非対称化で近似する。
         r = [
-            f'#msgText {{ font-size: {19 * mfs:.0f}px; }}',
-            f'#nameLabel {{ font-size: {18 * fs:.0f}px; }}',
+            f'#msgText {{ font-size: {19 * mfs:.0f}px; '
+            f'margin-left: {mtox:.0f}px; margin-top: {mtoy:.0f}px; }}',
+            f'#nameLabel {{ font-size: {18 * fs:.0f}px; '
+            f'margin-left: {mtox:.0f}px; }}',
             f'#choiceBtn {{ font-size: {17 * cht:.0f}px; '
             + self._pad4(14 * chy + choy, 20 * chx - chox, 14 * chy - choy, 20 * chx + chox)
             + ' }',

@@ -719,6 +719,11 @@
     Object.assign(elMsgWin.style,
       { left: m.x + "%", top: m.y + "%", width: m.w + "%",
         height: m.h + "%", bottom: "auto" });
+    // メッセージ枠内の文字位置（名前＋本文をまとめてオフセット）
+    const mtx = m.textX === undefined ? 0 : m.textX;
+    const mty = m.textY === undefined ? 0 : m.textY;
+    const mtr = (mtx || mty) ? `translate(${mtx}%, ${mty}%)` : "";
+    elName.style.transform = mtr; elText.style.transform = mtr;
     const g = layoutOf("gauges");
     Object.assign(elGauges.style, { left: g.x + "%", top: g.y + "%", right: "auto",
       transform: `scale(${compScaleXY("gauges")})`, transformOrigin: "top left" });
