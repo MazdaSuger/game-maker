@@ -144,17 +144,20 @@
     elChoices.innerHTML = "";
     (ev.options || []).forEach((opt) => {
       const b = document.createElement("button");
-      b.className = "choice-btn"; b.textContent = opt.text;
+      b.className = "choice-btn";
+      b.appendChild(mkLabel(opt.text));
       b.onclick = (e) => { e.stopPropagation(); elChoices.style.display = "none"; present(rt.choose(opt.index)); };
       elChoices.appendChild(b);
     });
     if (!ev.options.length) {
       const b = document.createElement("button");
-      b.className = "choice-btn"; b.textContent = "続ける";
+      b.className = "choice-btn";
+      b.appendChild(mkLabel("続ける"));
       b.onclick = (e) => { e.stopPropagation(); present(rt.choose(-1)); };
       elChoices.appendChild(b);
     }
     elChoices.style.display = "flex";
+    counterScale(elChoices, "choices");
   }
 
   // ---------------- 名前入力 ----------------
@@ -531,6 +534,8 @@
       $("title-name").style.display = "";
       $("title-name").textContent = DATA.meta.title || "ノベルゲーム";
     }
+    // タイトル文字も縦横比に連動しないよう逆スケール
+    wrapLabel($("title-name"));
     // タイトル文字の色（演出で上書き可）
     $("title-name").style.color =
       (tvar && tvar.color) || DATA.meta.titleColor || "#ffffff";
@@ -540,6 +545,7 @@
     const tn = layoutOf("titleName"), tb = layoutOf("title");
     Object.assign($("title-namebox").style, { left: tn.x + "%", top: tn.y + "%",
       transform: `translate(-50%,-50%) scale(${compScaleXY("titleName")})` });
+    counterScale($("title-namebox"), "titleName");
     // 「はじめから」「つづきから」を個別配置（タイトル直下の絶対配置）
     placeCoreTitleBtn($("btn-new"), "titleStart");
     placeCoreTitleBtn($("btn-continue"), "titleContinue");
@@ -547,6 +553,7 @@
     const tbtns = document.querySelector(".title-buttons");
     tbtns.style.left = tb.x + "%"; tbtns.style.top = tb.y + "%";
     tbtns.style.transform = `translate(-50%,-50%) scale(${compScaleXY("title")})`;
+    counterScale(tbtns, "title");
     // つづきから：セーブがあれば有効
     const hasSave = readSlots().some((s) => s);
     $("btn-continue").disabled = !hasSave;
@@ -566,7 +573,7 @@
     (tvar.buttons || []).forEach((spec) => {
       const btn = document.createElement("button");
       btn.className = "title-btn";
-      btn.textContent = spec.text || "";
+      btn.appendChild(mkLabel(spec.text || ""));
       btn.onclick = () => {
         if (spec.targetScene) {
           titleMode = false; hideOverlay("ov-title"); setGameChrome(true);
@@ -650,12 +657,44 @@
   }
   // 縦横比を変えられるよう、横(scaleX)・縦(scaleY)を個別に返す。
   // 未設定なら従来の uniform scale を使う。
-  function compScaleXY(key) {
+  function scaleXYof(key) {
     const L = layoutOf(key);
     const base = L.scale === undefined ? 100 : L.scale;
     const sx = (L.scaleX === undefined ? base : L.scaleX) / 100;
     const sy = (L.scaleY === undefined ? base : L.scaleY) / 100;
+    return { sx, sy };
+  }
+  function compScaleXY(key) {
+    const { sx, sy } = scaleXYof(key);
     return sx + "," + sy;
+  }
+  // コンポーネントの縦横比を変えても文字が歪まないよう、文字は .nm-label で包み、
+  // ボックスの拡縮を打ち消す逆スケールを当てる（文字サイズは textScale で別管理）。
+  function compTextScale(key) {
+    const t = layoutOf(key).textScale;
+    return (t === undefined ? 100 : t) / 100;
+  }
+  function mkLabel(text) {
+    const s = document.createElement("span");
+    s.className = "nm-label"; s.textContent = text == null ? "" : text;
+    return s;
+  }
+  function wrapLabel(el) {
+    let lbl = el.querySelector(":scope > .nm-label");
+    if (!lbl) {
+      lbl = document.createElement("span");
+      lbl.className = "nm-label";
+      while (el.firstChild) lbl.appendChild(el.firstChild);
+      el.appendChild(lbl);
+    }
+    return lbl;
+  }
+  function counterScale(scopeEl, key) {
+    if (!scopeEl) return;
+    const { sx, sy } = scaleXYof(key);
+    const t = compTextScale(key);
+    const tr = `scale(${sx ? t / sx : t}, ${sy ? t / sy : t})`;
+    scopeEl.querySelectorAll(".nm-label").forEach((s) => { s.style.transform = tr; });
   }
   // 「はじめから」「つづきから」をタイトル直下へ移し、個別の座標に配置する。
   function placeCoreTitleBtn(btn, key) {
@@ -667,6 +706,7 @@
     const d = layoutOf(key);
     btn.style.left = d.x + "%"; btn.style.top = d.y + "%";
     btn.style.transform = `translate(-50%,-50%) scale(${compScaleXY(key)})`;
+    wrapLabel(btn); counterScale(btn, key);
   }
 
   function applyLayout() {
@@ -681,9 +721,12 @@
     Object.assign($("items-btn").style,
       { left: it.x + "%", top: it.y + "%", right: "auto",
         transform: `scale(${compScaleXY("items")})`, transformOrigin: "top left" });
+    wrapLabel($("items-btn")); counterScale($("items-btn"), "items");
     const mn = layoutOf("menu");
     Object.assign($("menu").style, { left: mn.x + "%", top: mn.y + "%", right: "auto",
       transform: `scale(${compScaleXY("menu")})`, transformOrigin: "top left" });
+    $("menu").querySelectorAll("button").forEach((bb) => wrapLabel(bb));
+    counterScale($("menu"), "menu");
     const c = layoutOf("choices");
     Object.assign(elChoices.style,
       { left: c.x + "%", top: c.y + "%",

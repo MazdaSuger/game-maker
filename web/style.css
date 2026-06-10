@@ -189,3 +189,5 @@ html, body {
 .title-btn:disabled { color: #888; cursor: not-allowed; }
 /* 個別配置される「はじめから」「つづきから」 */
 .title-core-btn { position: absolute; transform: translate(-50%, -50%); }
+/* コンポーネントの縦横比変更で文字が歪まないよう、文字だけ逆スケールを当てる */
+.nm-label { display: inline-block; transform-origin: center center; }

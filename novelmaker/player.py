@@ -353,6 +353,11 @@ class PlayerWidget(QWidget):
         sy = self._num(d.get("scaleY", base), base) / 100.0
         return sx, sy
 
+    def _comp_text_scale(self, elem: str) -> float:
+        """文字サイズの倍率（コンポーネントの縦横比とは独立）。未設定なら 100%。"""
+        L = merged_layout(self.project)
+        return self._num(L.get(elem, {}).get("textScale", 100), 100) / 100.0
+
     def _size_qss(self) -> str:
         """文字サイズ（セリフ系）と各コンポーネントのサイズ(%)を反映する。
 
@@ -361,23 +366,25 @@ class PlayerWidget(QWidget):
         """
         fs = self._num(self.project.meta.get("fontScale", 100), 100) / 100.0
         mfs = fs * self._num(self.project.meta.get("msgFontScale", 100), 100) / 100.0
-        chx, chy = self._comp_scale_xy("choices")
-        mnx, mny = self._comp_scale_xy("menu")
-        its = self._comp_scale("items")
-        tnx, tny = self._comp_scale_xy("titleName")
-        tbx, tby = self._comp_scale_xy("title")
+        chx, chy = self._comp_scale_xy("choices"); cht = self._comp_text_scale("choices")
+        mnx, mny = self._comp_scale_xy("menu"); mnt = self._comp_text_scale("menu")
+        its = self._comp_scale("items"); itt = self._comp_text_scale("items")
+        tnx, tny = self._comp_scale_xy("titleName"); tnt = self._comp_text_scale("titleName")
+        tbx, tby = self._comp_scale_xy("title"); tbt = self._comp_text_scale("title")
+        # 文字サイズ(font-size)はコンポーネントの縦横比(scaleX/scaleY)に連動させず、
+        # textScale で独立に決める。箱の縦横比は左右/上下パディングで表現する。
         r = [
             f'#msgText {{ font-size: {19 * mfs:.0f}px; }}',
             f'#nameLabel {{ font-size: {18 * fs:.0f}px; }}',
-            f'#choiceBtn {{ font-size: {17 * chy:.0f}px; '
+            f'#choiceBtn {{ font-size: {17 * cht:.0f}px; '
             f'padding: {14 * chy:.0f}px {20 * chx:.0f}px; }}',
-            f'#menuBtn {{ font-size: {13 * mny:.0f}px; '
+            f'#menuBtn {{ font-size: {13 * mnt:.0f}px; '
             f'padding-left: {8 * mnx:.0f}px; padding-right: {8 * mnx:.0f}px; }}',
-            f'#titleName {{ font-size: {44 * tny:.0f}px; '
+            f'#titleName {{ font-size: {44 * tnt:.0f}px; '
             f'padding-left: {28 * tnx:.0f}px; padding-right: {28 * tnx:.0f}px; }}',
-            f'#titleBtn {{ font-size: {18 * tby:.0f}px; '
+            f'#titleBtn {{ font-size: {18 * tbt:.0f}px; '
             f'padding: {14 * tby:.0f}px {24 * tbx:.0f}px; }}',
-            f'#itemsBtn {{ font-size: {20 * its:.0f}px; '
+            f'#itemsBtn {{ font-size: {20 * itt:.0f}px; '
             f'border-radius: {22 * its:.0f}px; }}',
         ]
         return "\n".join(r)

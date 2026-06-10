@@ -558,6 +558,7 @@
       const d = (LAYOUT_DEFAULT[key] || {}).scale;
       return s == null ? (d == null ? 100 : d) : s;
     }
+    if (prop === "textScale" && cfg[prop] == null) return 100;  // 文字サイズの既定
     const v = cfg[prop];
     return v == null ? (LAYOUT_DEFAULT[key] || {})[prop] : v;
   }
@@ -641,9 +642,10 @@
       } else if (type === "sprite") {
         panel.appendChild(sliderRow("サイズ(高さ %)", "scale", 20, 200, 1));
       } else {
-        // point 系は横・縦を個別に＝縦横比を変えられる
+        // point 系は横・縦を個別に＝縦横比を変えられる。文字サイズは別管理（連動しない）。
         panel.appendChild(sliderRow("横幅 (%)", "scaleX", 20, 300, 1));
         panel.appendChild(sliderRow("縦高さ (%)", "scaleY", 20, 300, 1));
+        panel.appendChild(sliderRow("文字サイズ (%)", "textScale", 30, 300, 1));
       }
       // 非表示チェック
       const hl = el("label", { class: "field inline" });
@@ -656,7 +658,7 @@
       panel.appendChild(el("button", { onclick: () => {
         const d = LAYOUT_DEFAULT[key] || {}; const cfg = layCfg(key);
         ["x", "y", "w", "h", "scale"].forEach((p) => { if (d[p] != null) cfg[p] = d[p]; });
-        delete cfg.scaleX; delete cfg.scaleY;   // 縦横比のカスタムも解除
+        delete cfg.scaleX; delete cfg.scaleY; delete cfg.textScale;  // 縦横比・文字サイズも解除
         renderLayout(c);
       } }, ["既定値に戻す"]));
     }
