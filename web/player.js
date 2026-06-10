@@ -729,6 +729,9 @@
     const mc = $("msg-content");
     if (mc) mc.style.transform = mtr;
     else { elName.style.transform = mtr; elText.style.transform = mtr; }
+    // セリフ本文の折り返し幅（＝文字の入る横範囲）。未指定/100は枠いっぱい。
+    const tw = m.textWidth;
+    elText.style.maxWidth = (tw != null && tw < 100) ? tw + "%" : "";
     const g = layoutOf("gauges");
     Object.assign(elGauges.style, { left: g.x + "%", top: g.y + "%", right: "auto",
       transform: `scale(${compScaleXY("gauges")})`, transformOrigin: "top left" });

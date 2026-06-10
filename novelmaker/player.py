@@ -1213,8 +1213,15 @@ class PlayerWidget(QWidget):
         m_top = m["y"]
         if m_top + m["h"] > 100:
             m_top = max(0, 100 - m["h"])
-        self.msg_frame.setGeometry(px(m["x"], w), px(m_top, h),
-                                   px(m["w"], w), px(m["h"], h))
+        mfw = px(m["w"], w)
+        self.msg_frame.setGeometry(px(m["x"], w), px(m_top, h), mfw, px(m["h"], h))
+        # セリフ本文の折り返し幅（＝文字の入る横範囲）。枠内側の幅に対する割合。
+        tw = self._num(m.get("textWidth", 100), 100)
+        inner = max(40, mfw - 48)  # 左右パディング分を除いた内側幅
+        if tw < 100:
+            self.text_label.setMaximumWidth(int(inner * tw / 100.0))
+        else:
+            self.text_label.setMaximumWidth(16777215)  # 制限なし(QWIDGETSIZE_MAX)
         # ゲージパネル（左上座標）
         g = L["gauges"]
         self.gauge_panel.adjustSize()

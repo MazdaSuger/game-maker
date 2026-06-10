@@ -560,6 +560,7 @@
     }
     if (prop === "textScale" && cfg[prop] == null) return 100;  // 文字サイズの既定
     if ((prop === "textX" || prop === "textY") && cfg[prop] == null) return 0;  // 文字位置の既定
+    if (prop === "textWidth" && cfg[prop] == null) return 100;  // 折り返し幅の既定
     const v = cfg[prop];
     return v == null ? (LAYOUT_DEFAULT[key] || {})[prop] : v;
   }
@@ -651,6 +652,7 @@
       if (type === "box") {
         panel.appendChild(sliderRow("幅 (%)", "w", 10, 100, 1));
         panel.appendChild(sliderRow("高さ (%)", "h", 5, 100, 1));
+        panel.appendChild(sliderRow("文字の折り返し幅 (%)", "textWidth", 20, 100, 1));
         panel.appendChild(sliderRow("文字の横位置 (%)", "textX", -150, 150, 1));
         panel.appendChild(sliderRow("文字の縦位置 (%)", "textY", -150, 150, 1));
       } else if (type === "sprite") {
@@ -674,8 +676,8 @@
       panel.appendChild(el("button", { onclick: () => {
         const d = LAYOUT_DEFAULT[key] || {}; const cfg = layCfg(key);
         ["x", "y", "w", "h", "scale"].forEach((p) => { if (d[p] != null) cfg[p] = d[p]; });
-        // 縦横比・文字サイズ・文字位置も解除
-        ["scaleX", "scaleY", "textScale", "textX", "textY"].forEach((p) => delete cfg[p]);
+        // 縦横比・文字サイズ・文字位置・折り返し幅も解除
+        ["scaleX", "scaleY", "textScale", "textX", "textY", "textWidth"].forEach((p) => delete cfg[p]);
         renderLayout(c);
       } }, ["既定値に戻す"]));
     }
