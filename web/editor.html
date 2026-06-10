@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>ノベルメーカー — ブラウザ版エディタ</title>
+  <link rel="stylesheet" href="editor.css" />
+</head>
+<body>
+  <div id="app">
+    <div id="topbar">
+      <div class="brand">📖 ノベルメーカー Web</div>
+      <button id="btn-new">新規</button>
+      <button id="btn-open">開く(.nvproj)</button>
+      <button id="btn-save" class="primary">保存(.nvproj)</button>
+      <button id="btn-play">▶ テスト</button>
+      <button id="btn-export">⬇ HTML書き出し</button>
+      <span class="spacer"></span>
+      <span class="pname" id="pname"></span>
+      <input type="file" id="file-open" accept=".nvproj,.json,application/json" hidden />
+    </div>
+
+    <div id="body">
+      <div id="nav"></div>
+      <div id="content"></div>
+    </div>
+  </div>
+
+  <!-- 汎用モーダル -->
+  <div id="modal" class="overlay hidden"><div class="modal" id="modal-box"></div></div>
+
+  <!-- テストプレイ -->
+  <iframe id="playframe" class="hidden"></iframe>
+  <button id="playclose" class="hidden">✕ 閉じる</button>
+
+  <script src="model.js"></script>
+  <script src="engine.js"></script>
+  <script src="editor.js"></script>
+</body>
+</html>

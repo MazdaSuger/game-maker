@@ -1,0 +1,37 @@
+name: Deploy Web Editor (Pages)
+
+# web/ フォルダ（ブラウザ版エディタ＋実行ランタイム）を GitHub Pages に公開する。
+# 公開後、iPad 等のブラウザで <PagesのURL>/editor.html を開いて
+# Windows/Mac で作った .nvproj を読み込み、編集・テスト・書き出しできる。
+on:
+  push:
+    branches: ["main", "master"]
+    paths: ["web/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload web/ as Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

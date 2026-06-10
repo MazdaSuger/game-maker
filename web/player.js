@@ -8,7 +8,14 @@
   "use strict";
 
   const DATA = window.GAME_DATA;
-  if (!DATA) { document.body.innerHTML = "ゲームデータが見つかりません。"; return; }
+  if (!DATA) {
+    // ゲームデータが無い（＝Pagesのトップ等）場合はエディタへ誘導
+    try { window.location.replace("editor.html"); } catch (e) {}
+    document.body.innerHTML =
+      '<div style="color:#ccc;padding:24px;font-family:sans-serif">' +
+      'ゲームデータが見つかりません。<a style="color:#9cf" href="editor.html">エディタを開く</a></div>';
+    return;
+  }
   document.title = (DATA.meta && DATA.meta.title) || "ノベルゲーム";
 
   // システムデータ（全体共有・永続）: localStorage に保存
