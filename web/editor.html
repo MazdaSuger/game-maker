@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <title>ノベルメーカー — ブラウザ版エディタ</title>
-  <link rel="stylesheet" href="editor.css?v=20260611" />
+  <link rel="stylesheet" href="editor.css?v=20260611b" />
 </head>
 <body>
   <div id="app">
@@ -16,6 +16,7 @@
       <button id="btn-save" class="primary">保存(.nvproj)</button>
       <button id="btn-play">▶ テスト</button>
       <button id="btn-export">⬇ HTML書き出し</button>
+      <button id="btn-zip">⬇ Cloudflare用ZIP</button>
       <span class="spacer"></span>
       <span class="pname" id="pname"></span>
       <!-- iOS対策: accept指定なし＋labelで直接ピッカーを開く（display:noneにしない） -->
@@ -35,8 +36,8 @@
   <iframe id="playframe" class="hidden" allow="autoplay"></iframe>
   <button id="playclose" class="hidden">✕ 閉じる</button>
 
-  <script src="model.js?v=20260611"></script>
-  <script src="engine.js?v=20260611"></script>
-  <script src="editor.js?v=20260611"></script>
+  <script src="model.js?v=20260611b"></script>
+  <script src="engine.js?v=20260611b"></script>
+  <script src="editor.js?v=20260611b"></script>
 </body>
 </html>

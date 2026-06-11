@@ -871,6 +871,124 @@
     download(name, html, "text/html");
   }
 
+  // ============================================================
+  //  Cloudflare Pages 用 ZIP 書き出し
+  //  ルート直下に index.html / engine.js / player.js / style.css /
+  //  game.js / _headers と assets/ を入れる（デスクトップ版と同構成）。
+  // ============================================================
+  function* iterAssetFields(data) {
+    for (const bg of data.backgrounds || []) yield [bg, "image"];
+    for (const ch of data.characters || []) for (const ex of ch.expressions || []) yield [ex, "image"];
+    for (const tr of data.bgm || []) yield [tr, "path"];
+    for (const tr of data.se || []) yield [tr, "path"];
+    for (const cg of data.cg || []) yield [cg, "image"];
+    for (const it of data.items || []) yield [it, "image"];
+    const meta = data.meta;
+    if (meta) {
+      for (const key of ["fontPath", "titleLogoImage"]) if (key in meta) yield [meta, key];
+      for (const tv of meta.titleVariations || []) if ("logo" in tv) yield [tv, "logo"];
+    }
+    const theme = data.theme;
+    if (theme) for (const key of ["msgWindowImage", "choiceButtonImage", "titleButtonImage",
+      "titleFrameImage", "itemsButtonImage", "nameBoxImage", "nameFieldImage"])
+      if (key in theme) yield [theme, key];
+  }
+
+  const _crcTable = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[n] = c >>> 0; }
+    return t;
+  })();
+  function crc32(bytes) {
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) c = _crcTable[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  const _enc = (s) => new TextEncoder().encode(s);
+
+  function dataUrlToBytes(durl) {
+    const i = durl.indexOf(",");
+    if (i < 0) return null;
+    const head = durl.slice(5, i);                 // "<mime>;base64" 等（先頭 data: を除く）
+    const body = durl.slice(i + 1);
+    const mime = (head.split(";")[0]) || "application/octet-stream";
+    if (/;base64/i.test(head)) {
+      const bin = atob(body);
+      const bytes = new Uint8Array(bin.length);
+      for (let j = 0; j < bin.length; j++) bytes[j] = bin.charCodeAt(j);
+      return { mime, bytes };
+    }
+    return { mime, bytes: _enc(decodeURIComponent(body)) };
+  }
+  function extForMime(mime) {
+    const map = { "image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg", "image/webp": "webp",
+      "image/gif": "gif", "image/bmp": "bmp", "image/svg+xml": "svg",
+      "audio/mpeg": "mp3", "audio/mp3": "mp3", "audio/wav": "wav", "audio/x-wav": "wav",
+      "audio/ogg": "ogg", "audio/mp4": "m4a", "audio/aac": "aac",
+      "font/ttf": "ttf", "font/otf": "otf", "font/woff": "woff", "font/woff2": "woff2",
+      "application/font-woff": "woff", "application/x-font-ttf": "ttf" };
+    return map[mime] || (mime.split("/")[1] || "bin").replace(/[^a-z0-9]/gi, "") || "bin";
+  }
+
+  function makeZip(files) {
+    const body = [], central = [];
+    let offset = 0;
+    for (const f of files) {
+      const nameB = _enc(f.name), data = f.data, crc = crc32(data);
+      const lh = new DataView(new ArrayBuffer(30));
+      lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);
+      lh.setUint16(8, 0, true); lh.setUint16(10, 0, true); lh.setUint16(12, 0x21, true);
+      lh.setUint32(14, crc, true); lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true);
+      lh.setUint16(26, nameB.length, true); lh.setUint16(28, 0, true);
+      body.push(new Uint8Array(lh.buffer), nameB, data);
+      const ch = new DataView(new ArrayBuffer(46));
+      ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true);
+      ch.setUint16(8, 0x0800, true); ch.setUint16(10, 0, true); ch.setUint16(12, 0, true); ch.setUint16(14, 0x21, true);
+      ch.setUint32(16, crc, true); ch.setUint32(20, data.length, true); ch.setUint32(24, data.length, true);
+      ch.setUint16(28, nameB.length, true); ch.setUint32(42, offset, true);
+      central.push(new Uint8Array(ch.buffer), nameB);
+      offset += 30 + nameB.length + data.length;
+    }
+    let centralSize = 0; central.forEach((c) => centralSize += c.length);
+    const eo = new DataView(new ArrayBuffer(22));
+    eo.setUint32(0, 0x06054b50, true); eo.setUint16(8, files.length, true); eo.setUint16(10, files.length, true);
+    eo.setUint32(12, centralSize, true); eo.setUint32(16, offset, true);
+    const parts = body.concat(central, [new Uint8Array(eo.buffer)]);
+    let total = 0; parts.forEach((p) => total += p.length);
+    const out = new Uint8Array(total);
+    let p = 0; for (const part of parts) { out.set(part, p); p += part.length; }
+    return out;
+  }
+
+  async function exportZip() {
+    const bust = "?v=" + Date.now();
+    const [eng, ply, css, idx] = await Promise.all(
+      ["engine.js", "player.js", "style.css", "index.html"].map(
+        (f) => fetch(f + bust, { cache: "no-store" }).then((r) => r.text())));
+    const data = JSON.parse(JSON.stringify(state.project));
+    const files = [];
+    let n = 0;
+    for (const [holder, key] of iterAssetFields(data)) {
+      const v = holder[key];
+      if (!v || typeof v !== "string" || !v.startsWith("data:")) continue;
+      const dec = dataUrlToBytes(v);
+      if (!dec) continue;
+      const name = "assets/a" + (++n) + "." + extForMime(dec.mime);
+      files.push({ name, data: dec.bytes });
+      holder[key] = name;
+    }
+    const gameJs = "window.GAME_DATA = " + JSON.stringify(data, null, 2) + ";\n";
+    files.push({ name: "index.html", data: _enc(idx) });
+    files.push({ name: "engine.js", data: _enc(eng) });
+    files.push({ name: "player.js", data: _enc(ply) });
+    files.push({ name: "style.css", data: _enc(css) });
+    files.push({ name: "game.js", data: _enc(gameJs) });
+    files.push({ name: "_headers", data: _enc("/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n") });
+    const zip = makeZip(files);
+    const name = (data.meta.title || "novelgame").replace(/[\\/:*?"<>|]/g, "_") + "_cloudflare.zip";
+    download(name, zip, "application/zip");
+  }
+
   async function testPlay(startScene) {
     const proj = JSON.parse(JSON.stringify(state.project));
     if (startScene) {
@@ -902,6 +1020,7 @@
   };
   $("btn-save").onclick = saveProject;
   $("btn-export").onclick = () => exportHtml().catch((e) => alert("書き出し失敗: " + e));
+  $("btn-zip").onclick = () => exportZip().catch((e) => alert("ZIP書き出し失敗: " + e));
   $("btn-play").onclick = () => testPlay().catch((e) => alert("テスト失敗: " + e));
   $("playclose").onclick = closePlay;
   $("modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
