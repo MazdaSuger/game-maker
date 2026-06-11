@@ -301,7 +301,13 @@
       let pos = cmd.pos || "center";
       if (!["left", "center", "right"].includes(pos)) pos = "center";
       let show = ch ? (ch.showSprite !== false) : false;
-      if (cmd.hideSprite) show = false;
+      if (cmd.hideSprite) {
+        show = false;
+        // この発言では話者の立ち絵を消す（前の行で表示済みでも消える）
+        if (cid) Object.keys(st.sprites).forEach((p) => {
+          if (st.sprites[p].charId === cid) delete st.sprites[p];
+        });
+      }
       if (show && cid) {
         Object.keys(st.sprites).forEach((p) => {
           if (st.sprites[p].charId === cid && p !== pos) delete st.sprites[p];

@@ -375,6 +375,11 @@ class Runtime:
             show = bool(ch.get("showSprite", True)) if ch else False
             if cmd.get("hideSprite", False):
                 show = False
+                # この発言では話者の立ち絵を消す（前の行で表示済みでも消える）
+                if cid:
+                    for p in list(self.state.sprites.keys()):
+                        if self.state.sprites[p].get("charId") == cid:
+                            del self.state.sprites[p]
             if show and cid:
                 # 同一キャラは1スロットだけに（他スロットから取り除く）
                 for p in list(self.state.sprites.keys()):
