@@ -292,6 +292,14 @@
     sbar.appendChild(el("button", { onclick: () => { const s = P.scenes[state.sceneIdx]; if (!s) return; const n = prompt("シーン名", s.name); if (n) { s.name = n; renderScenes(c); } } }, ["改名"]));
     sbar.appendChild(el("button", { onclick: () => moveItem(P.scenes, state.sceneIdx, -1, (i) => { state.sceneIdx = i; renderScenes(c); }) }, ["▲"]));
     sbar.appendChild(el("button", { onclick: () => moveItem(P.scenes, state.sceneIdx, 1, (i) => { state.sceneIdx = i; renderScenes(c); }) }, ["▼"]));
+    sbar.appendChild(el("button", { onclick: () => {
+      const s = P.scenes[state.sceneIdx]; if (!s) return;
+      const clone = JSON.parse(JSON.stringify(s));
+      clone.id = uid("scene"); clone.name = (s.name || "") + " のコピー";
+      (clone.commands || []).forEach(freshenCommand);
+      P.scenes.splice(state.sceneIdx + 1, 0, clone);
+      state.sceneIdx += 1; renderScenes(c);
+    } }, ["複製"]));
     sbar.appendChild(el("button", { class: "danger", onclick: () => { const s = P.scenes[state.sceneIdx]; if (s && confirm("シーン「" + s.name + "」を削除？")) { P.scenes.splice(state.sceneIdx, 1); state.sceneIdx = Math.max(0, state.sceneIdx - 1); renderScenes(c); } } }, ["削除"]));
     left.appendChild(sbar);
     const scene = P.scenes[state.sceneIdx];
@@ -312,6 +320,10 @@
           el("span", { class: "col", text: describe(cmd, P) }),
           el("button", { onclick: (e) => { e.stopPropagation(); moveItem(scene.commands, i, -1, () => renderScenes(c)); } }, ["▲"]),
           el("button", { onclick: (e) => { e.stopPropagation(); moveItem(scene.commands, i, 1, () => renderScenes(c)); } }, ["▼"]),
+          el("button", { title: "複製", onclick: (e) => { e.stopPropagation();
+            const clone = freshenCommand(JSON.parse(JSON.stringify(scene.commands[i])));
+            scene.commands.splice(i + 1, 0, clone); renderScenes(c);
+          } }, ["⎘"]),
           el("button", { class: "danger", onclick: (e) => { e.stopPropagation(); scene.commands.splice(i, 1); renderScenes(c); } }, ["✕"]),
         ]);
         clist.appendChild(it);
@@ -335,6 +347,13 @@
 
   function editCommand(scene, i, c) {
     openCommandModal(scene.commands[i], (res) => { scene.commands[i] = res; renderScenes(c); });
+  }
+
+  // 複製時に重複IDを避けるため、ID系を振り直す
+  function freshenCommand(cmd) {
+    cmd.id = uid("cmd");
+    if (Array.isArray(cmd.options)) cmd.options.forEach((o) => { if (o && typeof o === "object") o.id = uid("opt"); });
+    return cmd;
   }
 
   function moveItem(arr, i, dir, after) {
@@ -589,7 +608,8 @@
     spriteLeft: { x: 25, y: 99, scale: 80 }, spriteCenter: { x: 50, y: 99, scale: 80 },
     spriteRight: { x: 75, y: 99, scale: 80 },
     gauges: { x: 1.2, y: 2, scale: 100 }, items: { x: 94, y: 2, scale: 100 },
-    menu: { x: 63, y: 9, scale: 100 }, titleName: { x: 50, y: 24, scale: 100 },
+    menu: { x: 63, y: 9, scale: 100 }, nameBox: { x: 50, y: 50, scale: 100 },
+    titleName: { x: 50, y: 24, scale: 100 },
     titleStart: { x: 50, y: 50, scale: 100 }, titleContinue: { x: 50, y: 58, scale: 100 },
     title: { x: 50, y: 70, scale: 100 },
   };
@@ -603,6 +623,7 @@
     ["gauges", "ゲージ", "point", "gauges"],
     ["items", "アイテム", "point", "items"],
     ["menu", "メニュー", "point", "menu"],
+    ["nameBox", "名前入力の枠", "point", "nameBox"],
     ["titleName", "タイトル文字", "point", "titleName"],
     ["titleStart", "「はじめから」", "point", "titleStart"],
     ["titleContinue", "「つづきから」", "point", "titleContinue"],
@@ -842,6 +863,7 @@
     ["choiceButtonImage", "選択肢ボタンの背景"],
     ["titleButtonImage", "タイトルボタンの背景"],
     ["itemsButtonImage", "アイテムボタンの画像"],
+    ["menuButtonImage", "メニューボタンの背景"],
     ["nameBoxImage", "名前入力の枠"],
     ["nameFieldImage", "名前入力の入力欄"],
   ];
@@ -867,6 +889,7 @@
     if (m.fontScale == null) m.fontScale = 100;
     if (m.msgFontScale == null) m.msgFontScale = 100;
     if (p.theme.titleFrameImage == null) p.theme.titleFrameImage = "";
+    if (p.theme.menuButtonImage == null) p.theme.menuButtonImage = "";
     if (!Array.isArray(m.titleVariations)) m.titleVariations = [];
     (p.scenes || []).forEach((s) => (s.commands || []).forEach((c) => {
       if (c.type === "say") { if (c.exprId === "__none__") c.exprId = ""; if (c.hideSprite == null) c.hideSprite = false; if (!c.pos) c.pos = "center"; }

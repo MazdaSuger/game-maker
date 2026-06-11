@@ -659,6 +659,7 @@
     gauges:  { x: 1.2, y: 2 },
     items:   { x: 94, y: 2 },
     menu:    { x: 63, y: 9 },
+    nameBox: { x: 50, y: 50 },
     titleName: { x: 50, y: 24 },
     titleStart:    { x: 50, y: 50 },
     titleContinue: { x: 50, y: 58 },
@@ -776,6 +777,11 @@
     Object.assign(elChoices.style,
       { left: c.x + "%", top: c.y + "%",
         transform: `translate(-50%,-50%) scale(${compScaleXY("choices")})` });
+    // 名前入力の枠（位置・縦横比）。中央寄せをやめ、レイアウト座標へ。
+    const nb = layoutOf("nameBox");
+    const nbBox = document.querySelector("#ov-name .box");
+    if (nbBox) Object.assign(nbBox.style, { position: "absolute", left: nb.x + "%",
+      top: nb.y + "%", transform: `translate(-50%,-50%) scale(${compScaleXY("nameBox")})` });
     // フォントサイズ（セリフ系）
     const fscale = (DATA.meta.fontScale || 100) / 100;
     const mscale = fscale * (DATA.meta.msgFontScale || 100) / 100;
@@ -806,6 +812,7 @@
     bg(".title-btn", t.titleButtonImage);
     bg("#title-namebox", t.titleFrameImage);
     bg("#items-btn", t.itemsButtonImage);
+    bg("#menu button", t.menuButtonImage);
     bg("#ov-name .box", t.nameBoxImage);
     bg("#name-field", t.nameFieldImage);
     // フォント

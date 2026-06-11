@@ -450,6 +450,7 @@ class PlayerWidget(QWidget):
         img_rule("#titleBtn", t.get("titleButtonImage", ""))
         img_rule("#titleNameBox", t.get("titleFrameImage", ""))
         img_rule("#itemsBtn", t.get("itemsButtonImage", ""))
+        img_rule("#menuBtn", t.get("menuButtonImage", ""))
         img_rule("#nameBox", t.get("nameBoxImage", ""))
         img_rule("#nameField", t.get("nameFieldImage", ""), extra="color:#fff;")
         return "\n".join(rules)

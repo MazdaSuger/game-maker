@@ -92,6 +92,7 @@ DEFAULT_LAYOUT = {
     "gauges":  {"x": 1.2, "y": 2.0, "scale": 100.0},     # 左上
     "items":   {"x": 94.0, "y": 2.0, "scale": 100.0},    # 左上座標（右上付近）
     "menu":    {"x": 63.0, "y": 9.0, "scale": 100.0},
+    "nameBox": {"x": 50.0, "y": 50.0, "scale": 100.0},   # 名前入力の枠（中央）
     # タイトル画面
     "titleName": {"x": 50.0, "y": 24.0, "scale": 100.0},  # タイトル文字/ロゴ（中央）
     "titleStart":    {"x": 50.0, "y": 50.0, "scale": 100.0},  # 「はじめから」ボタン
@@ -100,7 +101,7 @@ DEFAULT_LAYOUT = {
 }
 
 # サイズ(scale)を持つ point 系コンポーネント
-SCALE_COMPONENTS = ["choices", "gauges", "items", "menu", "titleName",
+SCALE_COMPONENTS = ["choices", "gauges", "items", "menu", "nameBox", "titleName",
                     "titleStart", "titleContinue", "title"]
 
 # 立ち絵スロット → レイアウトキー
@@ -116,6 +117,7 @@ LAYOUT_ELEMENTS = [
     ("gauges",  "ゲージ",   "point"),
     ("items",   "アイテム", "point"),
     ("menu",    "メニュー", "point"),
+    ("nameBox", "名前入力の枠", "point"),
     ("titleName", "タイトル文字", "point"),
     ("titleStart",    "「はじめから」", "point"),
     ("titleContinue", "「つづきから」", "point"),
@@ -129,6 +131,7 @@ DEFAULT_THEME = {
     "titleButtonImage": "",   # タイトルボタンの背景画像
     "titleFrameImage": "",    # タイトル文字/ロゴの背景枠画像
     "itemsButtonImage": "",   # アイテムボタンの画像
+    "menuButtonImage": "",    # メニュー（セーブ/ロード/タイトル）ボタンの背景画像
     "nameBoxImage": "",       # 名前入力の枠（コンポーネント枠）背景
     "nameFieldImage": "",     # 名前入力の入力欄背景
 }
@@ -139,6 +142,7 @@ THEME_FIELDS = [
     ("choiceButtonImage", "選択肢ボタンの背景"),
     ("titleButtonImage", "タイトルボタンの背景"),
     ("itemsButtonImage", "アイテムボタンの画像"),
+    ("menuButtonImage", "メニューボタンの背景"),
     ("nameBoxImage", "名前入力の枠"),
     ("nameFieldImage", "名前入力の入力欄"),
 ]
@@ -288,6 +292,7 @@ def migrate_project(data: dict) -> dict:
     meta.setdefault("msgFontScale", 100)
     theme = data.setdefault("theme", {})
     theme.setdefault("titleFrameImage", "")
+    theme.setdefault("menuButtonImage", "")
     return data
 
 
