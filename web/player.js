@@ -45,6 +45,7 @@
 
   let current = null, fullText = "", shown = 0, typing = false, typeTimer = null;
   let titleMode = false;
+  let peekCg = false;   // CG鑑賞モード（セリフ枠を一時的に隠して進行停止）
   const SAVE_KEY = "novelmaker_save_" + (DATA.meta.title || "game");
 
   // BGM
@@ -88,6 +89,7 @@
   // ---------------- 提示 ----------------
   function present(ev) {
     current = ev;
+    peekCg = false;                   // 新しい行に進んだらCG鑑賞モードを解除
     updateStage();
     (ev.sfx || []).forEach(playSe);   // 効果音
     elChoices.style.display = "none";
@@ -508,21 +510,40 @@
     return ["ov-name", "ov-items", "ov-save", "ov-ending", "ov-title", "ov-itemget"]
       .some((id) => !$(id).classList.contains("hidden"));
   }
+  // CGが表示されているか
+  function cgVisible() {
+    return !!(rt.state && rt.state.cg_id) && elCg.style.display !== "none";
+  }
+  // CG鑑賞モードに入れる状況か（CG表示中・セリフ表示中・進行可能な行）
+  function canPeekCg() {
+    if (peekCg || titleMode) return false;
+    if (!current || (current.kind !== "say" && current.kind !== "narrate" && current.kind !== "end")) return false;
+    if (compHidden("message")) return false;   // 枠が元々非表示なら不要
+    return cgVisible();
+  }
+  function setPeekCg(on) {
+    peekCg = on;
+    elMsgWin.style.display = on ? "none" : (compHidden("message") ? "none" : "");
+  }
 
   // ---------------- イベント結線 ----------------
   elMsgWin.addEventListener("click", (e) => { e.stopPropagation(); onAdvance(); });
-  // セリフ枠を非表示にした場合、ステージのクリックで進められる
-  $("stage").addEventListener("click", () => {
-    if (titleMode || !compHidden("message")) return;
+  $("stage").addEventListener("click", (e) => {
+    if (titleMode) return;
+    // ボタン等のUI操作はステージ進行/CG鑑賞のトリガーにしない（タイトルボタン等の伝播対策）
+    if (e.target.closest("button, input, select, textarea, a")) return;
     if (!$("endroll").classList.contains("hidden")) { skipEndroll(); return; }
-    if (!anyOverlayOpen()) onAdvance();
+    if (anyOverlayOpen()) return;
+    if (peekCg) { setPeekCg(false); return; }       // CG鑑賞モード解除（進行再開）
+    if (canPeekCg()) { setPeekCg(true); return; }    // 枠外タップでセリフ枠を隠してCGを鑑賞
+    if (compHidden("message")) onAdvance();          // 枠が元々非表示なら従来通り進行
   });
   $("endroll").addEventListener("click", skipEndroll);
   document.addEventListener("keydown", (e) => {
     if (e.key === " " || e.key === "Enter") {
       if (!$("endroll").classList.contains("hidden")) { e.preventDefault(); skipEndroll(); }
       else if (!$("ov-itemget").classList.contains("hidden")) { e.preventDefault(); closeItemGet(); }
-      else if (!titleMode && !anyOverlayOpen()) { e.preventDefault(); onAdvance(); }
+      else if (!titleMode && !anyOverlayOpen()) { e.preventDefault(); if (peekCg) setPeekCg(false); else onAdvance(); }
     }
   });
   $("items-btn").onclick = showItems;
