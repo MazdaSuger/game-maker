@@ -846,8 +846,11 @@
   }
 
   async function buildHtml(project) {
+    // キャッシュ回避: 常に最新のランタイムを取り込む（iPad Safari等の強いキャッシュ対策）
+    const bust = "?v=" + Date.now();
     const [eng, ply, css, idx] = await Promise.all(
-      ["engine.js", "player.js", "style.css", "index.html"].map((f) => fetch(f).then((r) => r.text())));
+      ["engine.js", "player.js", "style.css", "index.html"].map(
+        (f) => fetch(f + bust, { cache: "no-store" }).then((r) => r.text())));
     const m = idx.match(/<body>([\s\S]*?)<\/body>/i);
     let inner = (m ? m[1] : "");
     inner = inner.replace(/<script src="[^"]*"><\/script>/g, "");
