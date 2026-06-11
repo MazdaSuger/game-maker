@@ -61,6 +61,30 @@
   ["pointerdown", "touchstart", "keydown", "click"].forEach((ev) =>
     document.addEventListener(ev, unlockAudio, { once: false, passive: true }));
 
+  // 自動再生がブロックされていて、タイトルBGMが鳴らせないときだけ
+  // 「タップして始める」ゲートを出し、最初の操作で音楽を鳴らす。
+  let tapGate = null;
+  function showTapGate() {
+    if (tapGate || audioUnlocked) return;
+    tapGate = document.createElement("div");
+    tapGate.id = "tap-gate";
+    tapGate.innerHTML = '<div class="tap-gate-inner">🔊 タップして始める</div>';
+    const dismiss = (e) => {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      unlockAudio();
+      if (tapGate) { tapGate.remove(); tapGate = null; }
+    };
+    tapGate.addEventListener("pointerdown", dismiss);
+    tapGate.addEventListener("click", dismiss);
+    document.body.appendChild(tapGate);
+  }
+  function ensureTitleAudio() {
+    if (!audio || audioUnlocked) return;       // BGMが無い/既に解放済みなら不要
+    setTimeout(() => {
+      if (!audioUnlocked && audio && audio.paused) showTapGate();  // 自動再生がブロックされた
+    }, 150);
+  }
+
   // ---------------- 提示 ----------------
   function present(ev) {
     current = ev;
@@ -562,6 +586,7 @@
     curBgm = null; // 強制的に切り替え
     updateBgmById((tvar && tvar.bgm) || DATA.meta.titleBgm || "");
     showOverlay("ov-title");
+    ensureTitleAudio();
   }
 
   let titleExtraButtons = [];

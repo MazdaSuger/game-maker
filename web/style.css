@@ -194,3 +194,15 @@ html, body {
 .title-core-btn { position: absolute; transform: translate(-50%, -50%); }
 /* コンポーネントの縦横比変更で文字が歪まないよう、文字だけ逆スケールを当てる */
 .nm-label { display: inline-block; transform-origin: center center; }
+
+/* 自動再生ブロック時の「タップして始める」ゲート */
+#tap-gate {
+  position: absolute; inset: 0; z-index: 90; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.55); backdrop-filter: blur(1px);
+}
+#tap-gate .tap-gate-inner {
+  color: #fff; font-size: 22px; font-weight: bold; padding: 18px 28px;
+  border: 2px solid rgba(255,255,255,0.6); border-radius: 14px;
+  background: rgba(20,24,40,0.7); animation: blink 1.4s infinite;
+}
