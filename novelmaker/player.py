@@ -51,6 +51,7 @@ class PlayerWidget(QWidget):
 
         self._pix_cache: dict[str, QPixmap] = {}
         self._current_event = None
+        self._peek_cg = False   # CG鑑賞モード（セリフ枠を一時的に隠して進行停止）
         self._full_text = ""
         self._shown_chars = 0
         self._typing = False
@@ -148,8 +149,8 @@ class PlayerWidget(QWidget):
         self.choice_layout.setAlignment(Qt.AlignCenter)
         self.choice_frame.hide()
 
-        # 名前入力オーバーレイ
-        self.name_overlay = self._make_overlay()
+        # 名前入力オーバーレイ（枠を配置できるよう free）
+        self.name_overlay = self._make_overlay(free=True)
         self.name_overlay.box.setObjectName("nameBox")   # 枠（画像カスタム対象）
         nl = self.name_overlay.box_layout
         self.name_prompt = QLabel("", self.name_overlay)
@@ -202,8 +203,8 @@ class PlayerWidget(QWidget):
         sl.addWidget(close_save)
         self.save_overlay.hide()
 
-        # エンディングオーバーレイ
-        self.ending_overlay = self._make_overlay()
+        # エンディングオーバーレイ（枠を配置できるよう free）
+        self.ending_overlay = self._make_overlay(free=True)
         el = self.ending_overlay.box_layout
         self.ending_badge = QLabel("", self.ending_overlay)
         self.ending_badge.setObjectName("endingBadge")
@@ -312,22 +313,46 @@ class PlayerWidget(QWidget):
 
         self._apply_styles()
 
-    def _make_overlay(self, wide=False):
+    def _make_overlay(self, wide=False, free=False):
         ov = QFrame(self)
         ov.setObjectName("overlay")
         lay = QVBoxLayout(ov)
         lay.setAlignment(Qt.AlignCenter)
         box = QFrame(ov)
         box.setObjectName("overlayBox")
-        box.setMaximumWidth(640 if wide else 460)
+        if not free:
+            box.setMaximumWidth(640 if wide else 460)
         box.setMinimumWidth(420 if wide else 360)
         bl = QVBoxLayout(box)
         bl.setContentsMargins(24, 24, 24, 24)
         bl.setSpacing(12)
-        lay.addWidget(box)
+        if free:
+            # 枠を配置(位置/縦横比)できるよう、中央寄せレイアウトには入れず手動配置する
+            bl.setAlignment(Qt.AlignCenter)
+        else:
+            lay.addWidget(box)
         ov.box_layout = bl  # 後から中身を追加するため公開
         ov.box = box
+        ov.free = free
         return ov
+
+    def _position_overlay_box(self, ov, key):
+        """free オーバーレイの枠を layout 設定（位置・縦横比）に従い配置する。"""
+        if not getattr(ov, "free", False):
+            return
+        L = merged_layout(self.project)
+        d = L.get(key, {})
+        sx, sy = self._comp_scale_xy(key)
+        box = ov.box
+        box.adjustSize()
+        hint = box.sizeHint()
+        bw = max(box.minimumWidth(), int(hint.width() * sx))
+        bh = max(int(hint.height()), int(hint.height() * sy))
+        box.resize(bw, bh)
+        w, h = self.width(), self.height()
+        cx = int(self._num(d.get("x", 50), 50) / 100.0 * w)
+        cy = int(self._num(d.get("y", 50), 50) / 100.0 * h)
+        box.move(cx - bw // 2, cy - bh // 2)
 
     def _apply_styles(self):
         self.setStyleSheet(self._font_qss() + PLAYER_QSS
@@ -627,8 +652,28 @@ class PlayerWidget(QWidget):
             return ov
         return bool(merged_layout(self.project).get(key, {}).get("hidden", False))
 
+    def _can_peek_cg(self) -> bool:
+        """CG鑑賞モードに入れる状況か（CG表示中・セリフ表示中・進行可能な行）。"""
+        if self._peek_cg or self._title_mode:
+            return False
+        kind = (self._current_event or {}).get("kind")
+        if kind not in ("say", "narrate", "end"):
+            return False
+        if self._comp_hidden("message"):
+            return False
+        st = self.runtime.state
+        return bool(getattr(st, "cg_id", "")) and not getattr(st, "blackout", False)
+
+    def _set_peek_cg(self, on: bool):
+        self._peek_cg = on
+        if on:
+            self.msg_frame.hide()
+        elif not self._comp_hidden("message"):
+            self.msg_frame.show()
+
     def _present(self, ev: dict):
         self._current_event = ev
+        self._peek_cg = False   # 新しい行に進んだらCG鑑賞モードを解除
         self._update_stage()
         for se_id in ev.get("sfx", []):   # 効果音を再生
             self._play_se(se_id)
@@ -672,6 +717,7 @@ class PlayerWidget(QWidget):
                 QLineEdit.Password if ev.get("inputType") == "password"
                 else QLineEdit.Normal)
             self.name_overlay.show()
+            self._position_overlay_box(self.name_overlay, "nameBox")
             self._raise_overlays()
             self.name_field.setFocus()
 
@@ -838,6 +884,7 @@ class PlayerWidget(QWidget):
         self.ending_name.setText(ev.get("name", ""))
         self.ending_desc.setText(ev.get("desc", ""))
         self.ending_overlay.show()
+        self._position_overlay_box(self.ending_overlay, "endingBox")
         self._raise_overlays()
 
     # ------------------------------------------------------------------
@@ -1258,6 +1305,11 @@ class PlayerWidget(QWidget):
                    self.ending_overlay, self.title_overlay, self.endroll_overlay,
                    self.itemget_overlay):
             ov.setGeometry(0, 0, w, h)
+        # free 枠（名前入力/エンディング）は表示中なら配置を追従
+        if self.name_overlay.isVisible():
+            self._position_overlay_box(self.name_overlay, "nameBox")
+        if self.ending_overlay.isVisible():
+            self._position_overlay_box(self.ending_overlay, "endingBox")
         self._layout_title()
 
     def _raise_overlays(self):
@@ -1276,7 +1328,10 @@ class PlayerWidget(QWidget):
             elif not self._title_mode and not any(ov.isVisible() for ov in
                        (self.name_overlay, self.items_overlay, self.save_overlay,
                         self.ending_overlay, self.title_overlay, self.itemget_overlay)):
-                self._on_advance_click()
+                if self._peek_cg:
+                    self._set_peek_cg(False)
+                else:
+                    self._on_advance_click()
         super().keyPressEvent(event)
 
     def mousePressEvent(self, event):
@@ -1287,7 +1342,13 @@ class PlayerWidget(QWidget):
         elif not self._title_mode and not any(ov.isVisible() for ov in
                 (self.name_overlay, self.items_overlay, self.save_overlay,
                  self.ending_overlay, self.title_overlay, self.itemget_overlay)):
-            self._on_advance_click()
+            # CG鑑賞モード：枠外クリックで枠を隠す→再クリックで戻す
+            if self._peek_cg:
+                self._set_peek_cg(False)
+            elif self._can_peek_cg():
+                self._set_peek_cg(True)
+            else:
+                self._on_advance_click()
         super().mousePressEvent(event)
 
 
