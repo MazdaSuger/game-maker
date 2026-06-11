@@ -448,7 +448,8 @@ class Runtime:
         if t == "nameInput":
             return {"kind": "nameInput",
                     "prompt": cmd.get("prompt", "名前を入力"),
-                    "varName": cmd.get("varName", "")}
+                    "varName": cmd.get("varName", ""),
+                    "inputType": cmd.get("inputType", "text")}
 
         if t == "setVar":
             self._apply_setvar(cmd)

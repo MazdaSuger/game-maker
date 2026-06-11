@@ -125,6 +125,7 @@
     } else if (k === "nameInput") {
       $("name-prompt").textContent = ev.prompt || "名前を入力";
       $("name-field").value = "";
+      $("name-field").type = (ev.inputType === "password") ? "password" : "text";
       showOverlay("ov-name");
       $("name-field").focus();
     } else if (k === "itemGet") {

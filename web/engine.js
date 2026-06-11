@@ -357,7 +357,7 @@
     }
     if (t === "nameInput") {
       return { kind: "nameInput", prompt: cmd.prompt || "名前を入力",
-               varName: cmd.varName || "" };
+               varName: cmd.varName || "", inputType: cmd.inputType || "text" };
     }
     if (t === "setVar") { this._applySetVar(cmd); return null; }
     if (t === "gauge") { this._applyGauge(cmd); return null; }

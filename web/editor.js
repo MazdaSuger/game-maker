@@ -54,6 +54,7 @@
       case "compTarget": return COMP_TARGETS;
       case "compAction": return [["hide", "消去する"], ["show", "表示する"]];
       case "vartype": return [["number", "数値"], ["string", "文字列"], ["boolean", "真偽"]];
+      case "inputType": return [["text", "通常"], ["password", "パスワード(伏字)"]];
     }
     return [];
   }

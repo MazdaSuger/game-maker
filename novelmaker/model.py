@@ -38,7 +38,7 @@ COMMAND_TYPES = [
     ("compVis",   "コンポーネント表示・消去", "👁"),
     ("bgm",       "BGM",          "🎵"),
     ("se",        "効果音(SE)",   "🔊"),
-    ("nameInput", "名前入力",     "🔤"),
+    ("nameInput", "文字入力(名前/パスワード等)", "🔤"),
     ("setVar",    "変数操作",     "🔢"),
     ("gauge",     "ゲージ操作",   "📊"),
     ("item",      "アイテム",     "🎒"),
@@ -208,7 +208,7 @@ def new_command(ctype: str) -> dict:
     elif ctype == "cg":
         base.update(cgId="", action="show")  # show / hide
     elif ctype == "nameInput":
-        base.update(varName="", prompt="名前を入力してください")
+        base.update(varName="", prompt="名前を入力してください", inputType="text")
     elif ctype == "setVar":
         base.update(varName="", op="set", value="0")
     elif ctype == "gauge":
@@ -661,7 +661,8 @@ def describe_command(cmd: dict, project: "Project") -> str:
             return "CGを消す"
         return f"CG表示 → {cg['name'] if cg else '（未設定）'}"
     if t == "nameInput":
-        return f"名前入力 → 変数「{cmd.get('varName','?')}」"
+        mask = "(伏字)" if cmd.get("inputType") == "password" else ""
+        return f"文字入力{mask} → 変数「{cmd.get('varName','?')}」"
     if t == "setVar":
         op_map = dict(VAR_OPS)
         return f"変数 {cmd.get('varName','?')} {op_map.get(cmd.get('op'),'')} {cmd.get('value','')}"

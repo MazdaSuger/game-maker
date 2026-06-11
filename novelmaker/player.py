@@ -668,6 +668,9 @@ class PlayerWidget(QWidget):
         elif kind == "nameInput":
             self.name_prompt.setText(ev.get("prompt", "名前を入力"))
             self.name_field.setText("")
+            self.name_field.setEchoMode(
+                QLineEdit.Password if ev.get("inputType") == "password"
+                else QLineEdit.Normal)
             self.name_overlay.show()
             self._raise_overlays()
             self.name_field.setFocus()

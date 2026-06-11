@@ -22,7 +22,7 @@
     ["compVis", "コンポーネント表示・消去", "👁"],
     ["bgm", "BGM", "🎵"],
     ["se", "効果音(SE)", "🔊"],
-    ["nameInput", "名前入力", "🔤"],
+    ["nameInput", "文字入力(名前/パスワード等)", "🔤"],
     ["setVar", "変数操作", "🔢"],
     ["gauge", "ゲージ操作", "📊"],
     ["item", "アイテム", "🎒"],
@@ -80,6 +80,7 @@
     nameInput: [
       { k: "varName", label: "格納先(文字列変数)", t: "select", src: "strvar", none: "（変数を選択）" },
       { k: "prompt", label: "メッセージ", t: "str" },
+      { k: "inputType", label: "入力方式", t: "select", src: "inputType" },
     ],
     setVar: [
       { k: "varName", label: "変数", t: "select", src: "anyvar", none: "（変数を選択）" },
@@ -133,7 +134,7 @@
       compVis: { target: "message", action: "hide" },
       bgm: { action: "play", bgmId: "", loop: true, fadeMs: 0 },
       se: { seId: "" },
-      nameInput: { varName: "", prompt: "名前を入力してください" },
+      nameInput: { varName: "", prompt: "名前を入力してください", inputType: "text" },
       setVar: { varName: "", op: "set", value: "0" },
       gauge: { gaugeId: "", op: "add", value: "1" },
       item: { itemId: "", action: "add", notify: true },
@@ -171,7 +172,7 @@
     if (t === "compVis") { const n = (COMP_TARGETS.find((x) => x[0] === cmd.target) || [, "?"])[1]; return `${n} を ${cmd.action === "show" ? "表示" : "消去"}`; }
     if (t === "bgm") { const f = cmd.fadeMs ? `（フェード${cmd.fadeMs}ms）` : ""; if (cmd.action === "stop") return "BGM停止" + f; const b = byId(p.bgm, cmd.bgmId); return `BGM再生 → ${b ? b.name : "（未設定）"}${cmd.loop ? "（ループ）" : ""}${f}`; }
     if (t === "se") { const s = byId(p.se, cmd.seId); return "効果音 → " + (s ? s.name : "（未設定）"); }
-    if (t === "nameInput") return `名前入力 → 変数「${cmd.varName || "?"}」`;
+    if (t === "nameInput") return `文字入力${cmd.inputType === "password" ? "(伏字)" : ""} → 変数「${cmd.varName || "?"}」`;
     if (t === "setVar") { const o = (VAR_OPS.find((x) => x[0] === cmd.op) || [, ""])[1]; return `変数 ${cmd.varName || "?"} ${o} ${cmd.value}`; }
     if (t === "gauge") { const g = byId(p.gauges, cmd.gaugeId); const o = (GAUGE_OPS.find((x) => x[0] === cmd.op) || [, ""])[1]; return `ゲージ「${g ? g.name : "?"}」 ${o} ${cmd.value}`; }
     if (t === "item") { const it = byId(p.items, cmd.itemId); const a = { add: "入手", remove: "破棄", use: "使用" }[cmd.action] || "?"; return `アイテム ${a} → ${it ? it.name : "（未設定）"}`; }
