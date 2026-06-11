@@ -275,8 +275,16 @@
     const slist = el("div", { class: "list" });
     P.scenes.forEach((s, i) => {
       const mark = P.meta.startScene === s.id ? "⭐ " : "";
-      const it = el("div", { class: "item" + (i === state.sceneIdx ? " sel" : ""), onclick: () => { state.sceneIdx = i; renderScenes(c); } }, [mark + s.name]);
+      const it = el("div", { class: "item" + (i === state.sceneIdx ? " sel" : ""), onclick: () => { state.sceneIdx = i; renderScenes(c); } },
+        [el("span", { class: "grip", title: "ドラッグで並び替え" }, ["⠿"]), el("span", { class: "col", text: mark + s.name })]);
       slist.appendChild(it);
+    });
+    enableDragReorder(slist, P.scenes, (from, to) => {
+      // 選択中シーンが移動先に追従するよう sceneIdx を補正
+      if (state.sceneIdx === from) state.sceneIdx = to;
+      else if (from < state.sceneIdx && to >= state.sceneIdx) state.sceneIdx--;
+      else if (from > state.sceneIdx && to <= state.sceneIdx) state.sceneIdx++;
+      renderScenes(c);
     });
     left.appendChild(slist);
     const sbar = el("div", { class: "toolbar" });
@@ -299,6 +307,7 @@
       scene.commands = scene.commands || [];
       scene.commands.forEach((cmd, i) => {
         const it = el("div", { class: "item", onclick: () => editCommand(scene, i, c) }, [
+          el("span", { class: "grip", title: "ドラッグで並び替え" }, ["⠿"]),
           el("span", { text: (CMD_ICON[cmd.type] || "•") + "  " }),
           el("span", { class: "col", text: describe(cmd, P) }),
           el("button", { onclick: (e) => { e.stopPropagation(); moveItem(scene.commands, i, -1, () => renderScenes(c)); } }, ["▲"]),
@@ -307,6 +316,7 @@
         ]);
         clist.appendChild(it);
       });
+      enableDragReorder(clist, scene.commands, () => renderScenes(c));
       right.appendChild(clist);
       // 追加メニュー
       const addbar = el("div", { class: "toolbar" });
@@ -332,6 +342,52 @@
     if (j < 0 || j >= arr.length) return;
     const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
     after && after(j);
+  }
+
+  // ---- ドラッグ&ドロップ並び替え（ポインタイベント＝iPad等のタッチ対応）----
+  // listEl 内の各 .item に .grip があり、それを掴んで上下にドラッグすると
+  // arr の順序を入れ替える。完了時に onReorder() を呼ぶ（通常は再描画）。
+  function enableDragReorder(listEl, arr, onReorder) {
+    Array.from(listEl.children).forEach((item, idx) => {
+      const grip = item.querySelector(".grip");
+      if (!grip) return;
+      grip.style.touchAction = "none";
+      // グリップのタップで item の onclick（編集など）が発火しないように
+      grip.addEventListener("click", (e) => { e.stopPropagation(); e.preventDefault(); });
+      grip.addEventListener("pointerdown", (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const fromIdx = idx;
+        item.classList.add("dragging");
+        // タッチ中もドラッグを掴み続けるためキャプチャ（スクロール抑止）。
+        try { grip.setPointerCapture(e.pointerId); } catch (_) {}
+        const onMove = (ev) => {
+          const sibs = Array.from(listEl.children).filter((s) => s !== item);
+          let target = null;
+          for (const s of sibs) {
+            const r = s.getBoundingClientRect();
+            if (ev.clientY < r.top + r.height / 2) { target = s; break; }
+          }
+          if (target) listEl.insertBefore(item, target);
+          else listEl.appendChild(item);
+        };
+        const onUp = () => {
+          window.removeEventListener("pointermove", onMove);
+          window.removeEventListener("pointerup", onUp);
+          window.removeEventListener("pointercancel", onUp);
+          item.classList.remove("dragging");
+          const toIdx = Array.from(listEl.children).indexOf(item);
+          if (toIdx >= 0 && toIdx !== fromIdx) {
+            const [moved] = arr.splice(fromIdx, 1);
+            arr.splice(toIdx, 0, moved);
+            onReorder(fromIdx, toIdx);
+          }
+        };
+        // window で受けると、ポインタキャプチャの有無に関わらず確実に拾える。
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", onUp);
+        window.addEventListener("pointercancel", onUp);
+      });
+    });
   }
 
   // ---- リソース定義 ----

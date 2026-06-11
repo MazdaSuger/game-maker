@@ -45,8 +45,12 @@ h3 { margin: 14px 0 8px; font-size: 15px; color: #aab4d8; }
   display: flex; align-items: center; gap: 8px; }
 .list .item:last-child { border-bottom: none; }
 .list .item.sel { background: #3a6df0; }
-.list .item .grip { cursor: grab; opacity: .5; }
+.list .item .grip { cursor: grab; opacity: .5; touch-action: none; font-size: 16px;
+  padding: 0 2px; user-select: none; -webkit-user-select: none; }
+.list .item .grip:active { cursor: grabbing; }
 .list .item.dragover { outline: 2px dashed #5a8dff; outline-offset: -2px; }
+.list .item.dragging { opacity: .75; background: #2a3360; outline: 2px solid #5a8dff;
+  outline-offset: -2px; }
 .toolbar { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
 
 /* フォーム */
