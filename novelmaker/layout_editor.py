@@ -35,7 +35,11 @@ _ELEM_STYLE = {
     "gauges":  (PW * 0.20, PH * 0.10, "#ff6b9d"),
     "items":   (PW * 0.06, PH * 0.11, "#f0a030"),
     "menu":    (PW * 0.34, PH * 0.09, "#8a7bf0"),
+    "nameBox":   (PW * 0.36, PH * 0.22, "#6bd0a0"),
+    "endingBox": (PW * 0.36, PH * 0.30, "#d0b060"),
     "titleName": (PW * 0.30, PH * 0.12, "#ffd56b"),
+    "titleStart":    (PW * 0.22, PH * 0.08, "#7ad0ff"),
+    "titleContinue": (PW * 0.22, PH * 0.08, "#6ac0ef"),
     "title":     (PW * 0.26, PH * 0.16, "#7ad0ff"),
 }
 
@@ -212,7 +216,8 @@ class LayoutEditor(QWidget):
             x = d.get("x", 50) / 100.0 * PW
             y = d.get("y", 50) / 100.0 * PH
             if handle.kind == "point":          # 中央アンカー or 左上
-                if elem_id in ("choices", "titleName", "title"):
+                if elem_id in ("choices", "titleName", "title", "titleStart",
+                               "titleContinue", "nameBox", "endingBox"):
                     handle.move(int(x - handle.width() / 2),
                                 int(y - handle.height() / 2))
                 else:                           # gauges/items/menu は左上
@@ -226,7 +231,8 @@ class LayoutEditor(QWidget):
     def _on_handle_move(self, handle: _Handle):
         self.project.data.setdefault("layout", {})
         d = self.project.data["layout"].setdefault(handle.elem_id, {})
-        if handle.elem_id in ("choices", "titleName", "title"):
+        if handle.elem_id in ("choices", "titleName", "title", "titleStart",
+                              "titleContinue", "nameBox", "endingBox"):
             d["x"] = round((handle.x() + handle.width() / 2) / PW * 100, 1)
             d["y"] = round((handle.y() + handle.height() / 2) / PH * 100, 1)
         elif handle.kind == "sprite":
