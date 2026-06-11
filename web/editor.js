@@ -276,7 +276,7 @@
     const slist = el("div", { class: "list" });
     P.scenes.forEach((s, i) => {
       const mark = P.meta.startScene === s.id ? "⭐ " : "";
-      const it = el("div", { class: "item" + (i === state.sceneIdx ? " sel" : ""), onclick: () => { state.sceneIdx = i; renderScenes(c); } },
+      const it = el("div", { class: "item" + (i === state.sceneIdx ? " sel" : ""), onclick: () => { state.sceneIdx = i; state.cmdSelIdx = -1; renderScenes(c); } },
         [el("span", { class: "grip", title: "ドラッグで並び替え" }, ["⠿"]), el("span", { class: "col", text: mark + s.name })]);
       slist.appendChild(it);
     });
@@ -315,7 +315,8 @@
       const clist = el("div", { class: "list" });
       scene.commands = scene.commands || [];
       scene.commands.forEach((cmd, i) => {
-        const it = el("div", { class: "item", onclick: () => editCommand(scene, i, c) }, [
+        const it = el("div", { class: "item" + (i === state.cmdSelIdx ? " sel" : ""),
+          onclick: () => { state.cmdSelIdx = i; renderScenes(c); editCommand(scene, i, c); } }, [
           el("span", { class: "grip", title: "ドラッグで並び替え" }, ["⠿"]),
           el("span", { text: (CMD_ICON[cmd.type] || "•") + "  " }),
           el("span", { class: "col", text: describe(cmd, P) }),
@@ -323,22 +324,28 @@
           el("button", { onclick: (e) => { e.stopPropagation(); moveItem(scene.commands, i, 1, () => renderScenes(c)); } }, ["▼"]),
           el("button", { title: "複製", onclick: (e) => { e.stopPropagation();
             const clone = freshenCommand(JSON.parse(JSON.stringify(scene.commands[i])));
-            scene.commands.splice(i + 1, 0, clone); renderScenes(c);
+            scene.commands.splice(i + 1, 0, clone); state.cmdSelIdx = i + 1; renderScenes(c);
           } }, ["⎘"]),
-          el("button", { class: "danger", onclick: (e) => { e.stopPropagation(); scene.commands.splice(i, 1); renderScenes(c); } }, ["✕"]),
+          el("button", { class: "danger", onclick: (e) => { e.stopPropagation(); scene.commands.splice(i, 1); if (state.cmdSelIdx >= i) state.cmdSelIdx--; renderScenes(c); } }, ["✕"]),
         ]);
         clist.appendChild(it);
       });
       enableDragReorder(clist, scene.commands, () => renderScenes(c));
       right.appendChild(clist);
-      // 追加メニュー
+      // 追加メニュー（クリック中のコンポーネントの直下に挿入）
       const addbar = el("div", { class: "toolbar" });
       const sel = el("select");
       COMMAND_TYPES.forEach(([t, l, ic]) => sel.appendChild(el("option", { value: t }, [ic + " " + l])));
       addbar.appendChild(sel);
       addbar.appendChild(el("button", { class: "primary", onclick: () => {
         const cmd = newCommand(sel.value);
-        openCommandModal(cmd, (res) => { scene.commands.push(res); renderScenes(c); });
+        openCommandModal(cmd, (res) => {
+          const sidx = state.cmdSelIdx;
+          const at = (sidx != null && sidx >= 0 && sidx < scene.commands.length) ? sidx + 1 : scene.commands.length;
+          scene.commands.splice(at, 0, res);
+          state.cmdSelIdx = at;   // 連続追加は直前に作った物の下へ積む
+          renderScenes(c);
+        });
       } }, ["＋ コンポーネント追加"]));
       right.appendChild(addbar);
     }
@@ -909,7 +916,7 @@
 
   function setProject(p, fname) {
     state.project = migrate(p); state.fileName = fname || "";
-    state.sceneIdx = 0; state.resIdx = {}; state.section = "scenes";
+    state.sceneIdx = 0; state.resIdx = {}; state.section = "scenes"; state.cmdSelIdx = -1;
     $("pname").textContent = state.fileName || "（未保存）";
     renderNav(); renderContent();
   }
