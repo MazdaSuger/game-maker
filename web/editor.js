@@ -454,8 +454,9 @@
       labelf: (e) => "🔊 " + e.name },
     endings: { icon: "🏁", fields: [
       { k: "name", label: "名前", t: "str" }, { k: "hidden", label: "裏エンディングにする", t: "bool" },
+      { k: "cgId", label: "エンディングCG(任意)", t: "select", src: "cg", none: "（なし）" },
       { k: "desc", label: "説明文", t: "text" }],
-      neww: () => ({ id: uid("end"), name: "エンディング", hidden: false, desc: "" }),
+      neww: () => ({ id: uid("end"), name: "エンディング", hidden: false, cgId: "", desc: "" }),
       labelf: (e) => (e.hidden ? "🔒 " : "") + e.name },
   };
 
@@ -609,6 +610,7 @@
     spriteRight: { x: 75, y: 99, scale: 80 },
     gauges: { x: 1.2, y: 2, scale: 100 }, items: { x: 94, y: 2, scale: 100 },
     menu: { x: 63, y: 9, scale: 100 }, nameBox: { x: 50, y: 50, scale: 100 },
+    endingBox: { x: 50, y: 50, scale: 100 },
     titleName: { x: 50, y: 24, scale: 100 },
     titleStart: { x: 50, y: 50, scale: 100 }, titleContinue: { x: 50, y: 58, scale: 100 },
     title: { x: 50, y: 70, scale: 100 },
@@ -624,6 +626,7 @@
     ["items", "アイテム", "point", "items"],
     ["menu", "メニュー", "point", "menu"],
     ["nameBox", "名前入力の枠", "point", "nameBox"],
+    ["endingBox", "エンディング枠", "point", "endingBox"],
     ["titleName", "タイトル文字", "point", "titleName"],
     ["titleStart", "「はじめから」", "point", "titleStart"],
     ["titleContinue", "「つづきから」", "point", "titleContinue"],

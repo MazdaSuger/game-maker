@@ -121,6 +121,8 @@ html, body {
   display: flex; align-items: center; justify-content: center; z-index: 20;
 }
 .overlay.hidden { display: none; }
+/* エンディングCG表示時はオーバーレイ背景を薄くしてCGを見せる */
+.overlay.with-cg { background: rgba(0,0,0,0.28); }
 .box {
   background: #1a1e2e; border: 2px solid var(--border); border-radius: 16px;
   padding: 24px; width: min(640px, 90vw); max-height: 86vh; overflow: auto;

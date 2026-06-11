@@ -545,7 +545,7 @@ class EndingEditor(ListEditor):
 
     def default_entry(self):
         return {"id": uid("end"), "name": f"エンディング{len(self.entries())+1}",
-                "hidden": False, "desc": ""}
+                "hidden": False, "cgId": "", "desc": ""}
 
     def label_for(self, e):
         lock = "🔒 " if e.get("hidden") else ""
@@ -558,12 +558,24 @@ class EndingEditor(ListEditor):
         hidden = QCheckBox("裏エンディング（隠し要素）にする")
         hidden.setChecked(bool(e.get("hidden", False)))
         hidden.toggled.connect(lambda v: (e.__setitem__("hidden", v), self.touch()))
+        cg_combo = QComboBox()
+        cg_combo.addItem("（なし）", "")
+        for cg in self.project.cg:
+            cg_combo.addItem(cg.get("name", "CG"), cg["id"])
+        cur = e.get("cgId", "")
+        for i in range(cg_combo.count()):
+            if cg_combo.itemData(i) == cur:
+                cg_combo.setCurrentIndex(i)
+                break
+        cg_combo.currentIndexChanged.connect(
+            lambda _i: (e.__setitem__("cgId", cg_combo.currentData() or ""), self.touch()))
         desc = QPlainTextEdit(e.get("desc", ""))
         desc.setMinimumHeight(80)
         desc.textChanged.connect(
             lambda: (e.__setitem__("desc", desc.toPlainText()), self.touch()))
         f.addRow("名前:", name)
         f.addRow("", hidden)
+        f.addRow("エンディングCG(任意):", cg_combo)
         f.addRow("説明文:", desc)
         host = QWidget(); host.setLayout(f)
         self.form_host.addWidget(host)

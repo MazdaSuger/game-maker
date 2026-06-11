@@ -529,6 +529,7 @@ class Runtime:
                 "name": end["name"] if end else "エンディング",
                 "desc": end.get("desc", "") if end else "",
                 "hidden": end.get("hidden", False) if end else False,
+                "cgId": end.get("cgId", "") if end else "",
                 "count": self.system.data["endings"].get(end["id"], 0) if end else 0,
             }
 

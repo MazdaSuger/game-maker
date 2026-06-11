@@ -210,11 +210,27 @@
   // ---------------- エンディング ----------------
   function showEnding(ev) {
     elMsgWin.style.display = "none";
+    // エンディングCG（指定があれば全画面表示し、オーバーレイ背景を薄くする）
+    const ovEnd = $("ov-ending");
+    if (ev.cgId && cgs[ev.cgId]) {
+      const cg = cgs[ev.cgId];
+      if (cg.image) { elCg.style.backgroundImage = `url("${cg.image}")`; elCg.textContent = ""; }
+      else { elCg.style.backgroundImage = "none"; elCg.style.backgroundColor = cg.color || "#000"; elCg.textContent = "［CG］" + (cg.name || ""); }
+      elCg.style.display = "flex";
+      ovEnd.classList.add("with-cg");
+    } else {
+      ovEnd.classList.remove("with-cg");
+    }
     const badge = $("ending-badge");
     if (ev.hidden) { badge.textContent = "🔒 裏エンディング 🔒"; badge.style.color = "#ffd56b"; }
     else { badge.textContent = "★ ENDING ★"; badge.style.color = "#9fe3ff"; }
     $("ending-name").textContent = ev.name || "";
     $("ending-desc").textContent = ev.desc || "";
+    // エンディングのコンポーネント（テキスト枠）の配置・縦横比
+    const eb = layoutOf("endingBox");
+    const box = ovEnd.querySelector(".box");
+    if (box) Object.assign(box.style, { position: "absolute", left: eb.x + "%",
+      top: eb.y + "%", transform: `translate(-50%,-50%) scale(${compScaleXY("endingBox")})` });
     showOverlay("ov-ending");
   }
 
@@ -660,6 +676,7 @@
     items:   { x: 94, y: 2 },
     menu:    { x: 63, y: 9 },
     nameBox: { x: 50, y: 50 },
+    endingBox: { x: 50, y: 50 },
     titleName: { x: 50, y: 24 },
     titleStart:    { x: 50, y: 50 },
     titleContinue: { x: 50, y: 58 },

@@ -819,6 +819,15 @@ class PlayerWidget(QWidget):
     # --- エンディング ---
     def _show_ending(self, ev: dict):
         self.msg_frame.hide()
+        # エンディングCG（指定があれば背景に全画面描画し、枠の背景を薄くする）
+        cg_id = ev.get("cgId", "")
+        if cg_id:
+            self.runtime.state.cg_id = cg_id
+            self.runtime.state.blackout = False
+            self.ending_overlay.setStyleSheet("#overlay { background: rgba(0,0,0,0.28); }")
+            self.update()
+        else:
+            self.ending_overlay.setStyleSheet("")
         hidden = ev.get("hidden", False)
         self.ending_badge.setText("🔒 裏エンディング 🔒" if hidden else "★ ENDING ★")
         self.ending_badge.setStyleSheet(

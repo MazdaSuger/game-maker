@@ -93,6 +93,7 @@ DEFAULT_LAYOUT = {
     "items":   {"x": 94.0, "y": 2.0, "scale": 100.0},    # 左上座標（右上付近）
     "menu":    {"x": 63.0, "y": 9.0, "scale": 100.0},
     "nameBox": {"x": 50.0, "y": 50.0, "scale": 100.0},   # 名前入力の枠（中央）
+    "endingBox": {"x": 50.0, "y": 50.0, "scale": 100.0}, # エンディングの枠（中央）
     # タイトル画面
     "titleName": {"x": 50.0, "y": 24.0, "scale": 100.0},  # タイトル文字/ロゴ（中央）
     "titleStart":    {"x": 50.0, "y": 50.0, "scale": 100.0},  # 「はじめから」ボタン
@@ -101,8 +102,8 @@ DEFAULT_LAYOUT = {
 }
 
 # サイズ(scale)を持つ point 系コンポーネント
-SCALE_COMPONENTS = ["choices", "gauges", "items", "menu", "nameBox", "titleName",
-                    "titleStart", "titleContinue", "title"]
+SCALE_COMPONENTS = ["choices", "gauges", "items", "menu", "nameBox", "endingBox",
+                    "titleName", "titleStart", "titleContinue", "title"]
 
 # 立ち絵スロット → レイアウトキー
 SPRITE_POS_KEY = {"left": "spriteLeft", "center": "spriteCenter", "right": "spriteRight"}
@@ -118,6 +119,7 @@ LAYOUT_ELEMENTS = [
     ("items",   "アイテム", "point"),
     ("menu",    "メニュー", "point"),
     ("nameBox", "名前入力の枠", "point"),
+    ("endingBox", "エンディング枠", "point"),
     ("titleName", "タイトル文字", "point"),
     ("titleStart",    "「はじめから」", "point"),
     ("titleContinue", "「つづきから」", "point"),

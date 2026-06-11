@@ -417,6 +417,7 @@
         name: end ? end.name : "エンディング",
         desc: end ? (end.desc || "") : "",
         hidden: end ? !!end.hidden : false,
+        cgId: end ? (end.cgId || "") : "",
         count: count,
       };
     }
