@@ -52,15 +52,20 @@ class SceneEditor(QWidget):
             srow.addWidget(b)
         left.addLayout(srow)
 
-        # フォルダ（ファイル）操作
+        # フォルダ（ファイル）操作はメニューにまとめる（横幅が狭くても読める）
+        self.folder_btn = QToolButton()
+        self.folder_btn.setText("📁 フォルダ操作")
+        self.folder_btn.setPopupMode(QToolButton.InstantPopup)
+        fmenu = QMenu(self)
+        fmenu.addAction("このシーンをフォルダへ入れる／出す", self._set_folder)
+        fmenu.addSeparator()
+        fmenu.addAction("▲ フォルダごと上へ移動", lambda: self._move_folder(-1))
+        fmenu.addAction("▼ フォルダごと下へ移動", lambda: self._move_folder(1))
+        fmenu.addAction("⎘ フォルダごと複製", self._dup_folder)
+        self.folder_btn.setMenu(fmenu)
         frow = QHBoxLayout()
-        for text, slot in [("📁 入れる", self._set_folder),
-                           ("▲フォルダ", lambda: self._move_folder(-1)),
-                           ("▼フォルダ", lambda: self._move_folder(1)),
-                           ("⎘フォルダ複製", self._dup_folder)]:
-            b = QPushButton(text)
-            b.clicked.connect(slot)
-            frow.addWidget(b)
+        frow.addWidget(self.folder_btn)
+        frow.addStretch()
         left.addLayout(frow)
 
         self.start_btn = QPushButton("⭐ 開始シーンに設定")
