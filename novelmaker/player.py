@@ -383,6 +383,23 @@ class PlayerWidget(QWidget):
         L = merged_layout(self.project)
         return self._num(L.get(elem, {}).get("textScale", 100), 100) / 100.0
 
+    def _comp_font_factor(self, elem: str) -> float:
+        """ボタン等の文字サイズ倍率。
+        - textScale を明示指定していればそれを使う（ブラウザ版で個別調整したケース）。
+        - 無ければコンポーネントのサイズ(scale / 縦横比の幾何平均)に追従させる
+          （デスクトップの配置エディタは scale しか持たないため、文字も一緒に拡縮）。
+        最低 40% を保証し、文字が消えない/極端に小さくならないようにする。"""
+        L = merged_layout(self.project)
+        d = L.get(elem, {})
+        if "textScale" in d:
+            f = self._num(d.get("textScale", 100), 100) / 100.0
+        else:
+            base = self._num(d.get("scale", 100), 100)
+            sx = self._num(d.get("scaleX", base), base)
+            sy = self._num(d.get("scaleY", base), base)
+            f = ((max(1.0, sx) * max(1.0, sy)) ** 0.5) / 100.0
+        return max(0.4, f)
+
     def _comp_text_off(self, elem: str):
         """文字の横/縦位置オフセット(px)。textX/textY(%) を px 換算（基準40px）。"""
         L = merged_layout(self.project)
@@ -406,13 +423,13 @@ class PlayerWidget(QWidget):
         fs = self._num(self.project.meta.get("fontScale", 100), 100) / 100.0
         mfs = fs * self._num(self.project.meta.get("msgFontScale", 100), 100) / 100.0
         mtox, mtoy = self._comp_text_off("message")
-        chx, chy = self._comp_scale_xy("choices"); cht = self._comp_text_scale("choices")
+        chx, chy = self._comp_scale_xy("choices"); cht = self._comp_font_factor("choices")
         chox, choy = self._comp_text_off("choices")
-        mnx, mny = self._comp_scale_xy("menu"); mnt = self._comp_text_scale("menu")
-        its = self._comp_scale("items"); itt = self._comp_text_scale("items")
-        tnx, tny = self._comp_scale_xy("titleName"); tnt = self._comp_text_scale("titleName")
+        mnx, mny = self._comp_scale_xy("menu"); mnt = self._comp_font_factor("menu")
+        its = self._comp_scale("items"); itt = self._comp_font_factor("items")
+        tnx, tny = self._comp_scale_xy("titleName"); tnt = self._comp_font_factor("titleName")
         tnox, tnoy = self._comp_text_off("titleName")
-        tbx, tby = self._comp_scale_xy("title"); tbt = self._comp_text_scale("title")
+        tbx, tby = self._comp_scale_xy("title"); tbt = self._comp_font_factor("title")
         tbox, tboy = self._comp_text_off("title")
         # 文字サイズ(font-size)はコンポーネントの縦横比(scaleX/scaleY)に連動させず、
         # textScale で独立に決める。箱の縦横比は左右/上下パディングで表現する。
