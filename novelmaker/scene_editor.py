@@ -58,6 +58,7 @@ class SceneEditor(QWidget):
         self.folder_btn.setPopupMode(QToolButton.InstantPopup)
         fmenu = QMenu(self)
         fmenu.addAction("このシーンをフォルダへ入れる／出す", self._set_folder)
+        fmenu.addAction("✎ フォルダ名を変更", self._rename_folder)
         fmenu.addSeparator()
         fmenu.addAction("▲ フォルダごと上へ移動", lambda: self._move_folder(-1))
         fmenu.addAction("▼ フォルダごと下へ移動", lambda: self._move_folder(1))
@@ -241,6 +242,27 @@ class SceneEditor(QWidget):
         if not ok:
             return
         self.current_scene["folder"] = name.strip()
+        sid = self.current_scene["id"]
+        self._reload_keep(sid)
+        self._emit_changed()
+
+    def _rename_folder(self):
+        if not self.current_scene:
+            return
+        f = self.current_scene.get("folder", "") or ""
+        if not f:
+            QMessageBox.information(self, "フォルダ名を変更",
+                                   "このシーンはフォルダに入っていません。\n"
+                                   "先に「フォルダへ入れる」で名前を付けてください。")
+            return
+        name, ok = QInputDialog.getText(self, "フォルダ名を変更",
+                                        "新しいフォルダ名:", text=f)
+        if not ok or not name.strip():
+            return
+        new = name.strip()
+        for s in self.project.scenes:
+            if (s.get("folder", "") or "") == f:
+                s["folder"] = new
         sid = self.current_scene["id"]
         self._reload_keep(sid)
         self._emit_changed()
