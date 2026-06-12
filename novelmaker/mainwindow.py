@@ -94,7 +94,9 @@ class ProjectListDialog(QDialog):
             self.list.addItem("（履歴はありません。プロジェクトを保存/読込すると追加されます）")
             return
         for it in self._items:
-            w = QListWidgetItem(f'{it.get("title","(無題)")}\n{it.get("path","")}'
+            # フルパス（ユーザー名を含む）は出さず、ファイル名のみ表示する
+            fname = os.path.basename(it.get("path", "")) if it.get("path") else ""
+            w = QListWidgetItem(f'{it.get("title","(無題)")}\n{fname}'
                                 f'  —  {it.get("savedAt","")}')
             self.list.addItem(w)
 
@@ -532,9 +534,9 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "書き出し失敗", f"書き出せませんでした:\n{e}")
             return
         msg = (f"ブラウザ用ゲームを書き出しました。\n\n"
-               f"場所: {out_dir}\n"
                f"アセット: {result['assets']} 個をコピー\n\n"
-               f"「index.html」をブラウザで開くと遊べます。")
+               f"「index.html」をブラウザで開くと遊べます。\n"
+               f"（場所は「フォルダを開く」から確認できます）")
         if result["missing"]:
             msg += f"\n\n⚠ 見つからなかったファイル {len(result['missing'])} 件は除外しました。"
         box = QMessageBox(QMessageBox.Information, "書き出し完了", msg, parent=self)
@@ -543,7 +545,7 @@ class MainWindow(QMainWindow):
         box.exec()
         if box.clickedButton() is open_btn:
             self._open_folder(out_dir)
-        self.statusBar().showMessage(f"ブラウザ書き出し完了: {out_dir}", 5000)
+        self.statusBar().showMessage("ブラウザ書き出し完了", 5000)
 
     def export_zip(self):
         """Cloudflare Pages 等へそのままデプロイできる ZIP を書き出す。"""
@@ -565,7 +567,6 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "書き出し失敗", f"書き出せませんでした:\n{e}")
             return
         msg = (f"Cloudflare Pages 用の ZIP を書き出しました。\n\n"
-               f"ファイル: {zip_path}\n"
                f"アセット: {result['assets']} 個\n\n"
                "▼ デプロイ手順（Cloudflare Pages）\n"
                "1. Cloudflare ダッシュボード → Workers & Pages → Create → Pages\n"
@@ -581,7 +582,7 @@ class MainWindow(QMainWindow):
         box.exec()
         if box.clickedButton() is open_btn:
             self._open_folder(os.path.dirname(os.path.abspath(zip_path)))
-        self.statusBar().showMessage(f"Cloudflare用ZIP書き出し完了: {zip_path}", 5000)
+        self.statusBar().showMessage("Cloudflare用ZIP書き出し完了", 5000)
 
     def _open_folder(self, path: str):
         from PySide6.QtGui import QDesktopServices
@@ -665,7 +666,7 @@ class MainWindow(QMainWindow):
             self.project.dirty = False
             self._update_title()
             add_recent_project(path, self.project.title)
-            self.statusBar().showMessage(f"保存しました: {path}", 4000)
+            self.statusBar().showMessage("保存しました", 4000)
             return True
         except Exception as e:
             QMessageBox.critical(self, "保存失敗", f"保存できませんでした:\n{e}")
