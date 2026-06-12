@@ -13,7 +13,8 @@ from PySide6.QtWidgets import (
     QPushButton, QLabel, QMenu, QInputDialog, QMessageBox, QToolButton,
     QFrame, QDialog, QAbstractItemView,
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtGui import QColor, QBrush
 
 from .model import (
     Project, COMMAND_TYPES, COMMAND_ICONS, new_command, describe_command, uid,
@@ -50,6 +51,17 @@ class SceneEditor(QWidget):
             b.clicked.connect(slot)
             srow.addWidget(b)
         left.addLayout(srow)
+
+        # フォルダ（ファイル）操作
+        frow = QHBoxLayout()
+        for text, slot in [("📁 入れる", self._set_folder),
+                           ("▲フォルダ", lambda: self._move_folder(-1)),
+                           ("▼フォルダ", lambda: self._move_folder(1)),
+                           ("⎘フォルダ複製", self._dup_folder)]:
+            b = QPushButton(text)
+            b.clicked.connect(slot)
+            frow.addWidget(b)
+        left.addLayout(frow)
 
         self.start_btn = QPushButton("⭐ 開始シーンに設定")
         self.start_btn.clicked.connect(self._set_start)
@@ -110,45 +122,159 @@ class SceneEditor(QWidget):
             act.triggered.connect(lambda checked=False, t=ctype: self._add_command(t))
         self.add_btn.setMenu(menu)
 
+    # ------------------------------------------------------------------
+    # フォルダ（ファイル）管理
+    # ------------------------------------------------------------------
+    def _folder_order(self):
+        order = []
+        for s in self.project.scenes:
+            f = s.get("folder", "") or ""
+            if f not in order:
+                order.append(f)
+        return order
+
+    def _regroup(self, order=None):
+        """同じフォルダのシーンが連続する並びへ整列する。"""
+        if order is None:
+            order = self._folder_order()
+        by = {}
+        for s in self.project.scenes:
+            by.setdefault(s.get("folder", "") or "", []).append(s)
+        out = []
+        for f in order:
+            out.extend(by.get(f, []))
+        self.project.scenes[:] = out
+
+    def _first_scene_row(self):
+        for i in range(self.scene_list.count()):
+            if self.scene_list.item(i).data(Qt.UserRole):
+                return i
+        return -1
+
     def reload(self):
         """プロジェクト全体を読み直す（読込/インポート後に呼ぶ）。"""
         self.scene_list.blockSignals(True)
         self.scene_list.clear()
+        self._regroup()
         start = self.project.meta.get("startScene", "")
+        last_folder = None
         for s in self.project.scenes:
+            f = s.get("folder", "") or ""
+            if f and f != last_folder:
+                hdr = QListWidgetItem(f"📁 {f}")
+                hdr.setData(Qt.UserRole, None)
+                hdr.setFlags(Qt.ItemIsEnabled)   # 選択・ドラッグ不可
+                ft = hdr.font(); ft.setBold(True); hdr.setFont(ft)
+                hdr.setForeground(QBrush(QColor("#cfe0ff")))
+                hdr.setBackground(QBrush(QColor("#20284a")))
+                self.scene_list.addItem(hdr)
+            last_folder = f
             mark = "⭐ " if s["id"] == start else ""
-            item = QListWidgetItem(f'{mark}{s["name"]}')
+            indent = "   " if f else ""
+            item = QListWidgetItem(f'{indent}{mark}{s["name"]}')
             item.setData(Qt.UserRole, s["id"])
             self.scene_list.addItem(item)
         self.scene_list.blockSignals(False)
-        if self.project.scenes:
-            self.scene_list.setCurrentRow(0)
+        row = self._first_scene_row()
+        if row >= 0:
+            self.scene_list.setCurrentRow(row)
         else:
             self.current_scene = None
             self._reload_commands()
 
     def select_scene(self, scene_id: str):
-        """指定IDのシーンを一覧で選択する（フローチャックから呼ばれる）。"""
-        for i, s in enumerate(self.project.scenes):
-            if s["id"] == scene_id:
+        """指定IDのシーンを一覧で選択する（見出し行があるため行を検索）。"""
+        for i in range(self.scene_list.count()):
+            if self.scene_list.item(i).data(Qt.UserRole) == scene_id:
                 self.scene_list.setCurrentRow(i)
                 return
 
     def _refresh_scene_labels(self):
         start = self.project.meta.get("startScene", "")
-        for i, s in enumerate(self.project.scenes):
-            mark = "⭐ " if s["id"] == start else ""
-            self.scene_list.item(i).setText(f'{mark}{s["name"]}')
+        by_id = {s["id"]: s for s in self.project.scenes}
+        for i in range(self.scene_list.count()):
+            it = self.scene_list.item(i)
+            sid = it.data(Qt.UserRole)
+            if not sid or sid not in by_id:
+                continue
+            s = by_id[sid]
+            mark = "⭐ " if sid == start else ""
+            indent = "   " if (s.get("folder", "") or "") else ""
+            it.setText(f'{indent}{mark}{s["name"]}')
 
     # ------------------------------------------------------------------
     # シーン操作
     # ------------------------------------------------------------------
     def _scenes_reordered(self, *args):
-        """シーンをドラッグで並べ替えたら project.scenes も並べ替える。"""
+        """シーンをドラッグで並べ替えたら project.scenes も並べ替える。
+        フォルダ見出し行は除外し、フォルダが連続するよう整列し直す。"""
         ids = [self.scene_list.item(i).data(Qt.UserRole)
                for i in range(self.scene_list.count())]
+        ids = [i for i in ids if i]
         by_id = {s["id"]: s for s in self.project.scenes}
         self.project.scenes[:] = [by_id[i] for i in ids if i in by_id]
+        self._regroup()
+        sid = self.current_scene["id"] if self.current_scene else None
+        # ドラッグ中の再入を避けて遅延リロード（見出しを再描画）
+        QTimer.singleShot(0, lambda: self._reload_keep(sid))
+        self._emit_changed()
+
+    def _reload_keep(self, scene_id):
+        self.reload()
+        if scene_id:
+            self.select_scene(scene_id)
+
+    # ------------------------------------------------------------------
+    def _set_folder(self):
+        if not self.current_scene:
+            return
+        folders = [f for f in self._folder_order() if f]
+        hint = ("\n既存フォルダ: " + ", ".join(folders)) if folders else ""
+        cur = self.current_scene.get("folder", "") or ""
+        name, ok = QInputDialog.getText(
+            self, "フォルダ", "フォルダ名（空欄でフォルダから出す）:" + hint, text=cur)
+        if not ok:
+            return
+        self.current_scene["folder"] = name.strip()
+        sid = self.current_scene["id"]
+        self._reload_keep(sid)
+        self._emit_changed()
+
+    def _move_folder(self, direction):
+        if not self.current_scene:
+            return
+        f = self.current_scene.get("folder", "") or ""
+        order = self._folder_order()
+        i = order.index(f)
+        j = i + direction
+        if j < 0 or j >= len(order):
+            return
+        order[i], order[j] = order[j], order[i]
+        self._regroup(order)
+        sid = self.current_scene["id"]
+        self._reload_keep(sid)
+        self._emit_changed()
+
+    def _dup_folder(self):
+        if not self.current_scene:
+            return
+        f = self.current_scene.get("folder", "") or ""
+        if not f:
+            QMessageBox.information(self, "フォルダ複製",
+                                   "このシーンはフォルダに入っていません。")
+            return
+        new_name = f + " のコピー"
+        copies = []
+        for s in [x for x in self.project.scenes if (x.get("folder", "") or "") == f]:
+            cl = copy.deepcopy(s)
+            cl["id"] = uid("scene")
+            cl["folder"] = new_name
+            for c in cl.get("commands", []):
+                c["id"] = uid("cmd")
+            copies.append(cl)
+        self.project.scenes.extend(copies)
+        self._regroup()
+        self.reload()
         self._emit_changed()
 
     def _commands_reordered(self, *args):
@@ -164,7 +290,10 @@ class SceneEditor(QWidget):
     def _on_scene_selected(self, row: int):
         item = self.scene_list.item(row)
         if item is not None:
-            self.current_scene = self.project.scene(item.data(Qt.UserRole))
+            sid = item.data(Qt.UserRole)
+            if sid is None:
+                return   # フォルダ見出し行は無視（選択を変えない）
+            self.current_scene = self.project.scene(sid)
         elif 0 <= row < len(self.project.scenes):
             self.current_scene = self.project.scenes[row]
         else:
