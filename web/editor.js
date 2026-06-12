@@ -275,6 +275,36 @@
     return renderResource(c, state.section);
   }
 
+  // ---- シーンのフォルダ（「ファイル」）管理 ----
+  function folderOrder(P) {
+    const o = [];
+    (P.scenes || []).forEach((s) => { const f = s.folder || ""; if (o.indexOf(f) < 0) o.push(f); });
+    return o;
+  }
+  function regroupByOrder(P, order) {
+    const by = {};
+    P.scenes.forEach((s) => { const f = s.folder || ""; (by[f] = by[f] || []).push(s); });
+    const out = [];
+    order.forEach((f) => (by[f] || []).forEach((s) => out.push(s)));
+    P.scenes.length = 0; out.forEach((s) => P.scenes.push(s));
+  }
+  function moveFolder(P, folder, dir) {
+    const o = folderOrder(P); const i = o.indexOf(folder); const j = i + dir;
+    if (j < 0 || j >= o.length) return;
+    [o[i], o[j]] = [o[j], o[i]]; regroupByOrder(P, o);
+  }
+  function dupFolder(P, folder) {
+    const newName = (folder || "フォルダ") + " のコピー";
+    const copies = P.scenes.filter((s) => (s.folder || "") === folder).map((s) => {
+      const cl = JSON.parse(JSON.stringify(s));
+      cl.id = uid("scene"); cl.name = s.name || "";
+      cl.folder = newName; (cl.commands || []).forEach(freshenCommand);
+      return cl;
+    });
+    copies.forEach((s) => P.scenes.push(s));
+    regroupByOrder(P, folderOrder(P));
+  }
+
   // ---- シーン編集 ----
   function renderScenes(c) {
     c.innerHTML = "";
@@ -283,25 +313,59 @@
     const row = el("div", { class: "row" });
     // 左：シーン一覧
     const left = el("div", { class: "col" });
-    left.appendChild(el("h3", { text: "シーン一覧" }));
-    const slist = el("div", { class: "list" });
-    P.scenes.forEach((s, i) => {
-      const mark = P.meta.startScene === s.id ? "⭐ " : "";
-      const it = el("div", { class: "item" + (i === state.sceneIdx ? " sel" : ""), onclick: () => { state.sceneIdx = i; state.cmdSelIdx = -1; renderScenes(c); } },
-        [el("span", { class: "grip", title: "ドラッグで並び替え" }, ["⠿"]), el("span", { class: "col", text: mark + s.name })]);
-      slist.appendChild(it);
+    left.appendChild(el("h3", { text: "シーン一覧（📁＝フォルダ）" }));
+    // フォルダが連続する並びになるよう整列してから描画（選択シーンは維持）
+    const _selScene = P.scenes[state.sceneIdx];
+    regroupByOrder(P, folderOrder(P));
+    if (_selScene) state.sceneIdx = Math.max(0, P.scenes.indexOf(_selScene));
+    const fixSel = (id) => { state.sceneIdx = Math.max(0, P.scenes.findIndex((s) => s.id === id)); };
+    const order = folderOrder(P);
+    const groupArrs = {};
+    order.forEach((f) => { groupArrs[f] = P.scenes.filter((s) => (s.folder || "") === f); });
+    const commitGroups = () => {
+      const selId = (P.scenes[state.sceneIdx] || {}).id;
+      const out = []; order.forEach((f) => groupArrs[f].forEach((s) => out.push(s)));
+      P.scenes.length = 0; out.forEach((s) => P.scenes.push(s));
+      fixSel(selId); renderScenes(c);
+    };
+    order.forEach((folder) => {
+      if (folder !== "") {
+        const hdr = el("div", { class: "folder-hdr" }, [
+          el("span", { class: "col", title: "クリックで名前変更", onclick: () => {
+            const nn = prompt("フォルダ名を変更", folder);
+            if (nn != null) { P.scenes.forEach((s) => { if ((s.folder || "") === folder) s.folder = nn.trim(); }); renderScenes(c); }
+          } }, ["📁 " + folder]),
+          el("button", { title: "フォルダごと上へ", onclick: () => { const id = (P.scenes[state.sceneIdx] || {}).id; moveFolder(P, folder, -1); fixSel(id); renderScenes(c); } }, ["▲"]),
+          el("button", { title: "フォルダごと下へ", onclick: () => { const id = (P.scenes[state.sceneIdx] || {}).id; moveFolder(P, folder, 1); fixSel(id); renderScenes(c); } }, ["▼"]),
+          el("button", { title: "フォルダごと複製", onclick: () => { dupFolder(P, folder); renderScenes(c); } }, ["⎘"]),
+        ]);
+        left.appendChild(hdr);
+      }
+      const flist = el("div", { class: "list" });
+      groupArrs[folder].forEach((s) => {
+        const mark = P.meta.startScene === s.id ? "⭐ " : "";
+        const sel = P.scenes[state.sceneIdx] === s;
+        const it = el("div", { class: "item" + (sel ? " sel" : ""), onclick: () => { state.sceneIdx = P.scenes.indexOf(s); state.cmdSelIdx = -1; renderScenes(c); } },
+          [el("span", { class: "grip", title: "ドラッグで並び替え" }, ["⠿"]), el("span", { class: "col", text: mark + s.name })]);
+        flist.appendChild(it);
+      });
+      enableDragReorder(flist, groupArrs[folder], () => commitGroups());
+      left.appendChild(flist);
     });
-    enableDragReorder(slist, P.scenes, (from, to) => {
-      // 選択中シーンが移動先に追従するよう sceneIdx を補正
-      if (state.sceneIdx === from) state.sceneIdx = to;
-      else if (from < state.sceneIdx && to >= state.sceneIdx) state.sceneIdx--;
-      else if (from > state.sceneIdx && to <= state.sceneIdx) state.sceneIdx++;
-      renderScenes(c);
-    });
-    left.appendChild(slist);
     const sbar = el("div", { class: "toolbar" });
     sbar.appendChild(el("button", { onclick: () => { const n = prompt("シーン名"); if (n) { P.scenes.push({ id: uid("scene"), name: n, commands: [] }); if (P.scenes.length === 1) P.meta.startScene = P.scenes[0].id; state.sceneIdx = P.scenes.length - 1; renderScenes(c); } } }, ["＋追加"]));
     sbar.appendChild(el("button", { onclick: () => { const s = P.scenes[state.sceneIdx]; if (!s) return; const n = prompt("シーン名", s.name); if (n) { s.name = n; renderScenes(c); } } }, ["改名"]));
+    sbar.appendChild(el("button", { onclick: () => {
+      const s = P.scenes[state.sceneIdx]; if (!s) return;
+      const folders = folderOrder(P).filter((x) => x);
+      const hint = folders.length ? "\n既存フォルダ: " + folders.join(", ") : "";
+      const n = prompt("このシーンを入れるフォルダ名（空欄でフォルダから出す）" + hint, s.folder || "");
+      if (n == null) return;
+      s.folder = n.trim();
+      regroupByOrder(P, folderOrder(P));
+      state.sceneIdx = P.scenes.findIndex((x) => x.id === s.id);
+      renderScenes(c);
+    } }, ["📁 フォルダ"]));
     sbar.appendChild(el("button", { onclick: () => moveItem(P.scenes, state.sceneIdx, -1, (i) => { state.sceneIdx = i; renderScenes(c); }) }, ["▲"]));
     sbar.appendChild(el("button", { onclick: () => moveItem(P.scenes, state.sceneIdx, 1, (i) => { state.sceneIdx = i; renderScenes(c); }) }, ["▼"]));
     sbar.appendChild(el("button", { onclick: () => {

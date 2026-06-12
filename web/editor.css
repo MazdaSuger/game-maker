@@ -52,6 +52,12 @@ h3 { margin: 14px 0 8px; font-size: 15px; color: #aab4d8; }
 .list .item.dragging { opacity: .75; background: #2a3360; outline: 2px solid #5a8dff;
   outline-offset: -2px; }
 .toolbar { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+/* シーンのフォルダ見出し */
+.folder-hdr { display: flex; align-items: center; gap: 4px; margin: 10px 0 2px;
+  padding: 6px 8px; background: #20284a; border: 1px solid #3a4566; border-radius: 7px;
+  font-weight: bold; color: #cfe0ff; }
+.folder-hdr .col { cursor: pointer; }
+.folder-hdr button { padding: 4px 8px; font-size: 13px; }
 
 /* フォーム */
 .field { margin: 8px 0; }
