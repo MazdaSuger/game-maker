@@ -25,6 +25,14 @@
     return e;
   }
   const $ = (id) => document.getElementById(id);
+  // プロジェクト全体のフラグ地点(label)名を集める
+  function allLabels(P) {
+    const names = [];
+    (P.scenes || []).forEach((s) => (s.commands || []).forEach((cm) => {
+      if (cm.type === "label" && cm.name && names.indexOf(cm.name) < 0) names.push(cm.name);
+    }));
+    return names;
+  }
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   function markDirty() { /* 必要なら拡張 */ }
 
@@ -41,6 +49,8 @@
       case "item": return P.items.map((b) => [b.id, b.name]);
       case "gauge": return P.gauges.map((b) => [b.id, b.name]);
       case "scene": return P.scenes.map((b) => [b.id, b.name]);
+      case "jumpTarget": return P.scenes.map((s) => [s.id, "🎬 " + s.name])
+        .concat(allLabels(P).map((n) => ["flag:" + n, "🚩 " + n]));
       case "ending": return P.endings.map((b) => [b.id, (b.hidden ? "🔒" : "") + b.name]);
       case "strvar": return P.variables.filter((v) => v.type === "string").map((v) => [v.name, v.name])
         .concat((P.systemVars || []).filter((v) => v.type === "string").map((v) => [v.name, v.name + " [SYS]"]));

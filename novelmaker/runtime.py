@@ -499,8 +499,9 @@ class Runtime:
         if t == "if":
             ok = evaluate_condition(cmd.get("condition"), self.state)
             target = cmd.get("targetTrue") if ok else cmd.get("targetFalse")
-            if target:
-                self._goto_scene(target)
+            loc = self._resolve_jump(target)
+            if loc:
+                self.state.scene_id, self.state.cmd_index = loc
                 cmd["_jumped"] = True
             # target 未設定なら通常どおり次のコマンドへ
             return None
@@ -568,6 +569,15 @@ class Runtime:
     def _goto_scene(self, sid: str):
         self.state.scene_id = sid
         self.state.cmd_index = 0
+
+    def _resolve_jump(self, target):
+        """ジャンプ先を解決して (scene_id, cmd_index) を返す。
+        'flag:<名>' はフラグ地点、それ以外はシーンID。未設定なら None。"""
+        if not target:
+            return None
+        if target.startswith("flag:"):
+            return self._find_label(target[5:])
+        return (target, 0)
 
     def _find_label(self, name: str):
         """フラグ地点(label)を探す。まず現在シーン、無ければ全シーン。"""

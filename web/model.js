@@ -103,8 +103,8 @@
     ],
     if: [
       { k: "condition", label: "条件", t: "cond" },
-      { k: "targetTrue", label: "条件成立時", t: "select", src: "scene", none: "（次のコマンドへ）" },
-      { k: "targetFalse", label: "不成立時", t: "select", src: "scene", none: "（次のコマンドへ）" },
+      { k: "targetTrue", label: "条件成立時のジャンプ先", t: "select", src: "jumpTarget", none: "（次のコマンドへ）" },
+      { k: "targetFalse", label: "不成立時のジャンプ先", t: "select", src: "jumpTarget", none: "（次のコマンドへ）" },
     ],
     jump: [{ k: "targetScene", label: "移動先シーン", t: "select", src: "scene", none: "（シーンを選択）" }],
     label: [{ k: "name", label: "フラグ地点名", t: "str" }],

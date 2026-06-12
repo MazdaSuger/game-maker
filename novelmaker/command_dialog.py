@@ -372,13 +372,14 @@ class CommandDialog(QDialog):
         self.form_host.addWidget(box)
 
         f = QFormLayout()
-        scenes = [(s["id"], s["name"]) for s in self.project.scenes]
-        self.true_cb = _combo(scenes, self.cmd.get("targetTrue", ""),
+        targets = [(s["id"], "🎬 " + s["name"]) for s in self.project.scenes]
+        targets += [("flag:" + n, "🚩 " + n) for n in all_labels(self.project)]
+        self.true_cb = _combo(targets, self.cmd.get("targetTrue", ""),
                               none_label="（次のコマンドへ）")
-        self.false_cb = _combo(scenes, self.cmd.get("targetFalse", ""),
+        self.false_cb = _combo(targets, self.cmd.get("targetFalse", ""),
                                none_label="（次のコマンドへ）")
-        f.addRow("条件成立時:", self.true_cb)
-        f.addRow("不成立時:", self.false_cb)
+        f.addRow("条件成立時のジャンプ先:", self.true_cb)
+        f.addRow("不成立時のジャンプ先:", self.false_cb)
         self._add_form(f)
 
     def _form_choice(self):

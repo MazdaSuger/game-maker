@@ -256,6 +256,12 @@
     }
     return null;
   };
+  // ジャンプ先を解決: "flag:<名>"=フラグ地点 / それ以外=シーンID / 空=null
+  Runtime.prototype._resolveJumpTarget = function (target) {
+    if (!target) return null;
+    if (target.indexOf("flag:") === 0) return this._findLabel(target.slice(5));
+    return [target, 0];
+  };
 
   Runtime.prototype._run = function () {
     let guard = 0;
@@ -396,8 +402,8 @@
     if (t === "choice") return this._buildChoice(cmd);
     if (t === "if") {
       const ok = evaluateCondition(cmd.condition, st);
-      const target = ok ? cmd.targetTrue : cmd.targetFalse;
-      if (target) { this._goto(target); this._jumped = true; }
+      const loc = this._resolveJumpTarget(ok ? cmd.targetTrue : cmd.targetFalse);
+      if (loc) { st.scene_id = loc[0]; st.cmd_index = loc[1]; this._jumped = true; }
       return null;
     }
     if (t === "jump") {
