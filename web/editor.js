@@ -42,7 +42,8 @@
       case "gauge": return P.gauges.map((b) => [b.id, b.name]);
       case "scene": return P.scenes.map((b) => [b.id, b.name]);
       case "ending": return P.endings.map((b) => [b.id, (b.hidden ? "🔒" : "") + b.name]);
-      case "strvar": return P.variables.filter((v) => v.type === "string").map((v) => [v.name, v.name]);
+      case "strvar": return P.variables.filter((v) => v.type === "string").map((v) => [v.name, v.name])
+        .concat((P.systemVars || []).filter((v) => v.type === "string").map((v) => [v.name, v.name + " [SYS]"]));
       case "anyvar": return P.variables.map((v) => [v.name, v.name + " (" + v.type + ")"]).concat((P.systemVars || []).map((v) => [v.name, v.name + " [SYS]"]));
       case "pos": return SAY_POSITIONS;
       case "varOp": return VAR_OPS;

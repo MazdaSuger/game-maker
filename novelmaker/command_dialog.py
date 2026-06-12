@@ -256,12 +256,17 @@ class CommandDialog(QDialog):
         f = QFormLayout()
         str_vars = [(v["name"], v["name"]) for v in self.project.variables
                     if v.get("type") == "string"]
+        str_vars += [(v["name"], v["name"] + " [SYS]")
+                     for v in self.project.system_vars if v.get("type") == "string"]
         self.var_cb = _combo(str_vars, self.cmd.get("varName", ""),
                              none_label="（変数を選択）")
         self.prompt_edit = QLineEdit(self.cmd.get("prompt", ""))
+        self.input_type_cb = _combo([("text", "通常"), ("password", "パスワード(伏字)")],
+                                    self.cmd.get("inputType", "text"), none_label=None)
         f.addRow("格納先(文字列変数):", self.var_cb)
         f.addRow("メッセージ:", self.prompt_edit)
-        hint = QLabel("※ 文字列型の変数が候補に出ます。")
+        f.addRow("入力方式:", self.input_type_cb)
+        hint = QLabel("※ 文字列型の変数（システム変数も含む）が候補に出ます。")
         hint.setStyleSheet("color:#888;")
         f.addRow("", hint)
         self._add_form(f)
@@ -475,6 +480,7 @@ class CommandDialog(QDialog):
         elif t == "nameInput":
             self.cmd["varName"] = self.var_cb.currentData() or ""
             self.cmd["prompt"] = self.prompt_edit.text()
+            self.cmd["inputType"] = self.input_type_cb.currentData() or "text"
         elif t == "setVar":
             self.cmd["varName"] = self.var_cb.currentData() or ""
             self.cmd["op"] = self.op_cb.currentData()

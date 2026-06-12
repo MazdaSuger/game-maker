@@ -307,7 +307,10 @@ class Runtime:
             if kind == "nameInput":
                 var = self._pending.get("varName", "")
                 if var:
-                    self.state.variables[var] = text_input or ""
+                    store, persist = self._var_container(var)
+                    store[var] = text_input or ""
+                    if persist:
+                        self.system.save()
                 self.state.cmd_index += 1
             elif kind in ("say", "narrate", "endroll", "itemGet"):
                 self.state.cmd_index += 1

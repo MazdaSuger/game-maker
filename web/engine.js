@@ -209,7 +209,11 @@
       const kind = this._pending.kind;
       if (kind === "nameInput") {
         const v = this._pending.varName;
-        if (v) this.state.variables[v] = textInput || "";
+        if (v) {
+          // システム変数なら永続側へ、それ以外はローカルへ書き込む
+          if (this._sysnames.has(v)) { this.system.vars[v] = textInput || ""; this._persist(); }
+          else { this.state.variables[v] = textInput || ""; }
+        }
         this.state.cmd_index += 1;
       } else if (kind === "say" || kind === "narrate" ||
                  kind === "endroll" || kind === "itemGet") {
