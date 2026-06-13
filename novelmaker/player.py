@@ -143,10 +143,21 @@ class PlayerWidget(QWidget):
         mv.addWidget(self.text_label, 1)
         self.msg_frame.mousePressEvent = lambda ev: self._on_advance_click()
 
-        # 選択肢コンテナ
+        # 選択肢コンテナ（ボタンが多い/大きいときも潰れず文字が消えないようスクロール）
         self.choice_frame = QFrame(self)
-        self.choice_layout = QVBoxLayout(self.choice_frame)
+        _ch_outer = QVBoxLayout(self.choice_frame)
+        _ch_outer.setContentsMargins(0, 0, 0, 0)
+        self.choice_scroll = QScrollArea(self.choice_frame)
+        self.choice_scroll.setWidgetResizable(True)
+        self.choice_scroll.setFrameShape(QFrame.NoFrame)
+        self.choice_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.choice_scroll.setStyleSheet("background: transparent;")
+        self.choice_scroll.viewport().setStyleSheet("background: transparent;")
+        _ch_content = QWidget()
+        self.choice_layout = QVBoxLayout(_ch_content)
         self.choice_layout.setAlignment(Qt.AlignCenter)
+        self.choice_scroll.setWidget(_ch_content)
+        _ch_outer.addWidget(self.choice_scroll)
         self.choice_frame.hide()
 
         # 名前入力オーバーレイ（枠を配置できるよう free）
